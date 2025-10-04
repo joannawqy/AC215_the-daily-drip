@@ -1,0 +1,23 @@
+[project]
+name = "dailydrip-rag"
+version = "0.1.0"
+description = "RAG pipeline for DailyDrip over UC Davis dataset"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas",
+  "numpy",
+  "chromadb>=0.5.0",
+  "sentence-transformers>=2.2",
+  "pydantic>=2.7",
+  "typer>=0.9",
+  "tqdm",
+  "orjson",
+]
+[tool.setuptools]
+packages = ["src"]
+[project.scripts]
+rag-ingest = "src.ingest:main"
+rag-chunk  = "src.chunk:main"
+rag-index  = "src.index:main"
+rag-query  = "src.query:main"
