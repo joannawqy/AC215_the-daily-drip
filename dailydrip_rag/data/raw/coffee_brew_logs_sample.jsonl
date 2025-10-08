@@ -1,0 +1,250 @@
+{
+  "bean": {
+    "name": "Ethiopia Yirgacheffe Natural",
+    "process": "Natural",
+    "variety": "Heirloom",
+    "region": "Ethiopia",
+    "roast_level": 1,
+    "roasted_days": 15,
+    "altitude": 1800,
+    "flavor_notes": [
+      "blueberry",
+      "jasmine",
+      "citrus"
+    ]
+  },
+  "brewing": {
+    "temperature": 93,
+    "grinding_size": 22,
+    "brewer": "V60",
+    "dose": 15,
+    "target_water": 225,
+    "pours": [
+      {
+        "start": 0,
+        "end": 30,
+        "water_added": 50
+      },
+      {
+        "start": 30,
+        "end": 70,
+        "water_added": 75
+      },
+      {
+        "start": 70,
+        "end": 120,
+        "water_added": 100
+      }
+    ]
+  },
+  "evaluation": {
+    "liking": 8,
+    "jag": {
+      "flavour_intensity": 4,
+      "acidity": 3,
+      "mouthfeel": 4,
+      "sweetness": 5,
+      "purchase_intent": 3
+    }
+  }
+}
+{
+  "bean": {
+    "name": "Colombia Huila Washed",
+    "process": "Washed",
+    "variety": "Caturra",
+    "region": "Colombia",
+    "roast_level": 2,
+    "roasted_days": 30,
+    "altitude": 1600,
+    "flavor_notes": [
+      "caramel",
+      "cocoa",
+      "nutty"
+    ]
+  },
+  "brewing": {
+    "temperature": 91,
+    "grinding_size": 20,
+    "brewer": "April",
+    "dose": 18,
+    "target_water": 270,
+    "pours": [
+      {
+        "start": 0,
+        "end": 40,
+        "water_added": 60
+      },
+      {
+        "start": 40,
+        "end": 90,
+        "water_added": 90
+      },
+      {
+        "start": 90,
+        "end": 150,
+        "water_added": 120
+      }
+    ]
+  },
+  "evaluation": {
+    "liking": 7,
+    "jag": {
+      "flavour_intensity": 4,
+      "acidity": 2,
+      "mouthfeel": 3,
+      "sweetness": 4,
+      "purchase_intent": 4
+    }
+  }
+}
+{
+  "bean": {
+    "name": "Kenya AA Washed",
+    "process": "Washed",
+    "variety": "SL28",
+    "region": "Kenya",
+    "roast_level": 1,
+    "roasted_days": 45,
+    "altitude": 2000,
+    "flavor_notes": [
+      "blackcurrant",
+      "bergamot",
+      "tomato"
+    ]
+  },
+  "brewing": {
+    "temperature": 95,
+    "grinding_size": 24,
+    "brewer": "Orea",
+    "dose": 20,
+    "target_water": 300,
+    "pours": [
+      {
+        "start": 0,
+        "end": 30,
+        "water_added": 70
+      },
+      {
+        "start": 30,
+        "end": 90,
+        "water_added": 90
+      },
+      {
+        "start": 90,
+        "end": 150,
+        "water_added": 140
+      }
+    ]
+  },
+  "evaluation": {
+    "liking": 9,
+    "jag": {
+      "flavour_intensity": 5,
+      "acidity": 4,
+      "mouthfeel": 4,
+      "sweetness": 3,
+      "purchase_intent": 5
+    }
+  }
+}
+{
+  "bean": {
+    "name": "Panama Geisha Natural",
+    "process": "Natural",
+    "variety": "Geisha",
+    "region": "Panama",
+    "roast_level": 0,
+    "roasted_days": 25,
+    "altitude": 1800,
+    "flavor_notes": [
+      "floral",
+      "tropical fruit",
+      "peach"
+    ]
+  },
+  "brewing": {
+    "temperature": 85,
+    "grinding_size": 18,
+    "brewer": "Origami",
+    "dose": 13,
+    "target_water": 195,
+    "pours": [
+      {
+        "start": 0,
+        "end": 30,
+        "water_added": 50
+      },
+      {
+        "start": 30,
+        "end": 70,
+        "water_added": 70
+      },
+      {
+        "start": 70,
+        "end": 110,
+        "water_added": 75
+      }
+    ]
+  },
+  "evaluation": {
+    "liking": 10,
+    "jag": {
+      "flavour_intensity": 5,
+      "acidity": 5,
+      "mouthfeel": 5,
+      "sweetness": 5,
+      "purchase_intent": 5
+    }
+  }
+}
+{
+  "bean": {
+    "name": "Costa Rica Tarrazú Honey",
+    "process": "Honey",
+    "variety": "Caturra",
+    "region": "Costa Rica",
+    "roast_level": 2,
+    "roasted_days": 12,
+    "altitude": 1400,
+    "flavor_notes": [
+      "honey",
+      "apple",
+      "chocolate"
+    ]
+  },
+  "brewing": {
+    "temperature": 92,
+    "grinding_size": 21,
+    "brewer": "V60",
+    "dose": 16,
+    "target_water": 240,
+    "pours": [
+      {
+        "start": 0,
+        "end": 30,
+        "water_added": 60
+      },
+      {
+        "start": 30,
+        "end": 80,
+        "water_added": 90
+      },
+      {
+        "start": 80,
+        "end": 130,
+        "water_added": 90
+      }
+    ]
+  },
+  "evaluation": {
+    "liking": 8,
+    "jag": {
+      "flavour_intensity": 4,
+      "acidity": 3,
+      "mouthfeel": 4,
+      "sweetness": 5,
+      "purchase_intent": 3
+    }
+  }
+}
