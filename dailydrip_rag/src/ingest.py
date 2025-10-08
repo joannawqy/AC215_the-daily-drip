@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 
 INCLUDE_COLUMNS = [
-    # tailor these if you want to restrict text fields
+
     "bean.name", "bean.process", "bean.variety", "bean.region",
     "bean.roast_level", "bean.roasted_days", "bean.altitude", "bean.flavor_notes",
     "brewing.brewer", "brewing.temperature", "brewing.grinding_size",
@@ -47,7 +47,6 @@ def iter_json_any(path: str):
     with open(path, "r", encoding="utf-8") as f:
         s = f.read()
 
-    # Try whole JSON first
     try:
         data = json.loads(s)
         if isinstance(data, list):
@@ -58,7 +57,6 @@ def iter_json_any(path: str):
     except json.JSONDecodeError:
         pass
 
-    # Try JSONL line-by-line
     ok_lines = True
     objs = []
     for line in s.splitlines():
@@ -73,7 +71,6 @@ def iter_json_any(path: str):
         for o in objs: yield o
         return
 
-    # Fallback: concatenated objects via raw decoder
     dec = json.JSONDecoder()
     i, n = 0, len(s)
     while i < n:

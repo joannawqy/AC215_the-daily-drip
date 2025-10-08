@@ -9,10 +9,10 @@ def sanitize_meta(meta: dict) -> dict:
         if isinstance(v, (str, int, float, bool)) or v is None:
             out[k] = v
         elif isinstance(v, list):
-            # join list values; you can choose another delimiter if you prefer
+
             out[k] = ", ".join(map(str, v))
         elif isinstance(v, dict):
-            # flatten one level; stringify non-primitive leaves
+            
             for kk, vv in v.items():
                 key = f"{k}.{kk}"
                 if isinstance(vv, (str, int, float, bool)) or vv is None:
@@ -41,7 +41,7 @@ def main():
             obj = json.loads(line)
             ids.append(str(obj["id"]))
             docs.append(obj["text"])
-            metas.append(sanitize_meta(obj["meta"]))  # <-- sanitize here
+            metas.append(sanitize_meta(obj["meta"]))  
 
     B = 256
     for i in range(0, len(ids), B):
