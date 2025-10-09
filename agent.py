@@ -21,6 +21,8 @@ You will receive a coffee bean description and the name of a pour-over brewer.
 Your job is to recommend a complete brewing recipe tailored to that bean and brewer.
 You may also receive up to three reference recipes from similar beans; treat them as
 inspiration while tailoring the final plan to the provided bean and brewer.
+If the user supplies an additional custom request (e.g., dose preference or taste goal),
+incorporate it thoughtfully into your final recipe.
 
 The bean information always arrives as JSON with fields such as: name, process, variety,
 region, roast_level, roasted_days, altitude, and flavor_notes. The brewer is one of
@@ -37,6 +39,24 @@ Create a recipe that respects the following constraints:
   * Sum of water_added must equal target_water.
 - Always echo back the brewer from the input exactly.
 
+Your output must be a single JSON object with this structure:
+{
+  "brewing": {
+    "brewer": string,
+    "temperature": integer,
+    "grinding_size": integer,
+    "dose": integer,
+    "target_water": integer,
+    "pours": [
+      {
+        "start": integer,
+        "end": integer,
+        "water_added": integer
+      },
+      ...
+    ]
+  }
+}
 
 """
 
@@ -200,7 +220,8 @@ def query_reference_recipes(
         RAG_COLLECTION, embedding_function=embedding
     )
 
-    query_text = bean_text_from_obj({"bean": bean_info})
+    query_source = bean_info if "bean" in bean_info else {"bean": bean_info}
+    query_text = bean_text_from_obj(query_source)
     response = collection.query(
         query_texts=[query_text],
         n_results=k,
@@ -236,30 +257,33 @@ def generate_recipe(
     brewer: str,
     *,
     reference_recipes: Optional[List[Dict[str, Any]]] = None,
+    custom_note: Optional[str] = None,
     model: str = "gpt-4.1-mini",
     temperature: float = 0.6,
     top_p: float = 0.9,
 ) -> Dict[str, Any]:
     """
     Generate a pour-over recipe for the given bean and brewer.
+    Optionally provide RAG reference recipes and a user custom note to steer the output.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise EnvironmentError("OPENAI_API_KEY is not set.")
 
     client = OpenAI(api_key=api_key)
+    payload: Dict[str, Any] = {
+        "bean": bean_info,
+        "brewer": brewer,
+        "reference_recipes": reference_recipes or [],
+    }
+    if custom_note:
+        payload["custom_note"] = custom_note
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": json.dumps(
-                {
-                    "bean": bean_info,
-                    "brewer": brewer,
-                    "reference_recipes": reference_recipes or [],
-                },
-                ensure_ascii=False,
-            ),
+            "content": json.dumps(payload, ensure_ascii=False),
         },
     ]
 
@@ -350,6 +374,10 @@ def main() -> None:
         help="Nucleus sampling probability.",
     )
     parser.add_argument(
+        "--note",
+        help="Optional custom instruction to guide the recipe (e.g., dosing or taste preference).",
+    )
+    parser.add_argument(
         "--rag-persist-dir",
         default=str(DEFAULT_RAG_PERSIST_DIR),
         help="Path to the RAG persist directory (Chroma).",
@@ -384,10 +412,12 @@ def main() -> None:
             )
         except Exception as exc:  # pragma: no cover - best effort
             print(f"Warning: skipping RAG references ({exc})", file=sys.stderr)
+    print("Get references: \n", references)
     recipe = generate_recipe(
         bean_info,
         args.brewer,
         reference_recipes=references,
+        custom_note=args.note,
         model=args.model,
         temperature=args.temperature,
         top_p=args.top_p,
