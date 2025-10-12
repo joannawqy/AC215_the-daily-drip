@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+dailydrip_rag/
+*.log
+
+# API Keys
+*_key.txt
+credentials.json
+
+# Output directories
+outputs/
+my_recipe*/
+test_recipe*/
+saved_recipes*/
+batch_output/
+examples/
+
+# Generated files
+brew_recipe*.html
+brew_recipe*.txt
+brew_recipe*.md
+*_recipe.json
+*_visualization.*
