@@ -2,10 +2,14 @@ import argparse
 import json
 import os
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 try:
     import chromadb
@@ -13,6 +17,11 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     chromadb = None  # type: ignore[assignment]
     embedding_functions = None  # type: ignore[assignment]
+
+try:
+    import httpx
+except ImportError:  # pragma: no cover - optional dependency
+    httpx = None  # type: ignore[assignment]
 
 
 SYSTEM_PROMPT = """You are a pour-over coffee brewing assistant.
@@ -61,6 +70,22 @@ Your output must be a single JSON object with this structure:
 """
 
 
+DEFAULT_RAG_PERSIST_DIR = Path(__file__).parent / "dailydrip_rag" / "indexes" / "chroma"
+DEFAULT_RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL")
+RAG_COLLECTION = "coffee_chunks"
+RAG_MODEL = "all-MiniLM-L6-v2"
+BEAN_COLUMNS = [
+    "bean.name",
+    "bean.process",
+    "bean.variety",
+    "bean.region",
+    "bean.roast_level",
+    "bean.roasted_days",
+    "bean.altitude",
+    "bean.flavor_notes",
+]
+
+
 def load_bean_info(bean_source: str) -> Dict[str, Any]:
     """
     Load bean information from a JSON string or a path to a JSON file.
@@ -83,21 +108,6 @@ def clean_json_payload(payload: str) -> str:
         if payload.lower().startswith("json"):
             payload = payload[4:]
     return payload.strip()
-
-
-DEFAULT_RAG_PERSIST_DIR = Path(__file__).parent / "dailydrip_rag" / "indexes" / "chroma"
-RAG_COLLECTION = "coffee_chunks"
-RAG_MODEL = "all-MiniLM-L6-v2"
-BEAN_COLUMNS = [
-    "bean.name",
-    "bean.process",
-    "bean.variety",
-    "bean.region",
-    "bean.roast_level",
-    "bean.roasted_days",
-    "bean.altitude",
-    "bean.flavor_notes",
-]
 
 
 def flatten_dict(data: Dict[str, Any], parent: str = "", sep: str = ".") -> Dict[str, Any]:
@@ -193,17 +203,49 @@ def extract_evaluation(meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return evaluation or None
 
 
-def query_reference_recipes(
-    bean_info: Dict[str, Any],
-    *,
-    persist_dir: Path = DEFAULT_RAG_PERSIST_DIR,
-    k: int = 3,
+def _fetch_references_via_service(
+    bean_info: Dict[str, Any], *, rag_service_url: str, k: int
 ) -> List[Dict[str, Any]]:
-    """
-    Retrieve up to ``k`` similar beans from the RAG index.
-    """
+    if httpx is None:
+        raise RuntimeError("httpx is not installed; cannot call the RAG service.")
+
+    if not rag_service_url:
+        raise ValueError("RAG service URL must not be empty.")
+
+    payload: Dict[str, Any] = {"k": k}
+    if "bean" in bean_info:
+        payload["record"] = bean_info
+        if isinstance(bean_info.get("bean"), dict):
+            payload["bean"] = bean_info["bean"]
+    else:
+        payload["bean"] = bean_info
+
+    with httpx.Client(base_url=rag_service_url, timeout=30.0) as client:
+        response = client.post("/rag", json=payload)
+        if response.status_code != 200:
+            detail = response.text
+            raise RuntimeError(f"RAG service returned an error ({response.status_code}): {detail}")
+        data = response.json()
+
+    results = data.get("results", [])
+    references: List[Dict[str, Any]] = []
+    for item in results:
+        reference = {
+            "rank": item.get("rank"),
+            "id": item.get("id"),
+            "distance": item.get("distance"),
+            "bean_text": item.get("bean_text"),
+            "brewing": item.get("brewing"),
+            "evaluation": item.get("evaluation"),
+        }
+        references.append(reference)
+    return references
+
+def _fetch_references_via_local_index(
+    bean_info: Dict[str, Any], *, persist_dir: Path, k: int
+) -> List[Dict[str, Any]]:
     if chromadb is None or embedding_functions is None:
-        raise RuntimeError("chromadb is not installed; cannot query RAG index.")
+        raise RuntimeError("chromadb is not installed; cannot query the local index.")
 
     if k <= 0:
         return []
@@ -252,6 +294,35 @@ def query_reference_recipes(
     return references
 
 
+def query_reference_recipes(
+    bean_info: Dict[str, Any],
+    *,
+    persist_dir: Path = DEFAULT_RAG_PERSIST_DIR,
+    rag_service_url: Optional[str] = DEFAULT_RAG_SERVICE_URL,
+    k: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve up to ``k`` similar beans from either the remote RAG service or the local index.
+    """
+    if k <= 0:
+        return []
+
+    if rag_service_url:
+        return _fetch_references_via_service(
+            bean_info, rag_service_url=rag_service_url, k=k
+        )
+
+    return _fetch_references_via_local_index(bean_info, persist_dir=persist_dir, k=k)
+
+
+@lru_cache(maxsize=1)
+def _get_openai_client() -> OpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise EnvironmentError("OPENAI_API_KEY is not set.")
+    return OpenAI(api_key=api_key)
+
+
 def generate_recipe(
     bean_info: Dict[str, Any],
     brewer: str,
@@ -266,11 +337,7 @@ def generate_recipe(
     Generate a pour-over recipe for the given bean and brewer.
     Optionally provide RAG reference recipes and a user custom note to steer the output.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("OPENAI_API_KEY is not set.")
-
-    client = OpenAI(api_key=api_key)
+    client = _get_openai_client()
     payload: Dict[str, Any] = {
         "bean": bean_info,
         "brewer": brewer,
@@ -342,18 +409,118 @@ def validate_recipe(recipe: Dict[str, Any]) -> None:
         raise ValueError("Brewer is required in brewing section.")
 
 
+class BrewRequest(BaseModel):
+    bean: Dict[str, Any] = Field(..., description="Structured JSON description of the coffee bean.")
+    brewer: str = Field(
+        ...,
+        description="Name of the brewer, e.g., V60, April, Orea, or Origami.",
+    )
+    note: Optional[str] = Field(
+        default=None,
+        description="Optional customization request, such as desired flavor or pour preference.",
+    )
+    rag_service_url: Optional[str] = Field(
+        default=None,
+        description="Override the default RAG service URL when querying references.",
+    )
+    rag_persist_dir: Optional[str] = Field(
+        default=None,
+        description="Path to the local Chroma index used when falling back from the service.",
+    )
+    rag_k: int = Field(default=3, ge=1, le=10, description="Number of RAG references to retrieve.")
+    model: str = Field(default="gpt-4.1-mini", description="OpenAI model used to generate recipes.")
+    temperature: float = Field(default=0.6, ge=0.0, le=2.0, description="Sampling temperature.")
+    top_p: float = Field(default=0.9, ge=0.0, le=1.0, description="Nucleus sampling probability.")
+    rag_enabled: bool = Field(default=True, description="Whether to perform RAG retrieval.")
+
+
+class BrewResponse(BaseModel):
+    references: List[Dict[str, Any]]
+    recipe: Dict[str, Any]
+
+
+def brew_with_options(
+    bean_info: Dict[str, Any],
+    brewer: str,
+    *,
+    note: Optional[str],
+    rag_enabled: bool,
+    rag_service_url: Optional[str],
+    rag_persist_dir: Optional[str],
+    rag_k: int,
+    model: str,
+    temperature: float,
+    top_p: float,
+) -> BrewResponse:
+    references: List[Dict[str, Any]] = []
+    if rag_enabled:
+        references = query_reference_recipes(
+            bean_info,
+            persist_dir=Path(rag_persist_dir or DEFAULT_RAG_PERSIST_DIR),
+            rag_service_url=rag_service_url or DEFAULT_RAG_SERVICE_URL,
+            k=rag_k,
+        )
+
+    recipe = generate_recipe(
+        bean_info,
+        brewer,
+        reference_recipes=references,
+        custom_note=note,
+        model=model,
+        temperature=temperature,
+        top_p=top_p,
+    )
+    recipe = normalize_recipe(recipe)
+    validate_recipe(recipe)
+    return BrewResponse(references=references, recipe=recipe)
+
+
+app = FastAPI(
+    title="DailyDrip Agent Service",
+    description="Accepts coffee bean information, consults the RAG service, and produces a brewing recipe via OpenAI.",
+    version="0.2.0",
+)
+
+
+@app.post("/brew", response_model=BrewResponse)
+async def brew_endpoint(payload: BrewRequest) -> BrewResponse:
+    try:
+        return await run_in_threadpool(
+            brew_with_options,
+            payload.bean,
+            payload.brewer,
+            note=payload.note,
+            rag_enabled=payload.rag_enabled,
+            rag_service_url=payload.rag_service_url,
+            rag_persist_dir=payload.rag_persist_dir,
+            rag_k=payload.rag_k,
+            model=payload.model,
+            temperature=payload.temperature,
+            top_p=payload.top_p,
+        )
+    except EnvironmentError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a pour-over recipe with OpenAI."
+        description="Generate a pour-over recipe with OpenAI or start the HTTP service."
+    )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Start the FastAPI service instead of running in CLI mode.",
     )
     parser.add_argument(
         "--bean",
-        required=True,
-        help="JSON string or path to a JSON file describing the bean.",
+        help="JSON string or path to a JSON file describing the bean (not required in --serve mode).",
     )
     parser.add_argument(
         "--brewer",
-        required=True,
         help="Name of the brewer (e.g., V60, April, Orea, Origami).",
     )
     parser.add_argument(
@@ -383,6 +550,11 @@ def main() -> None:
         help="Path to the RAG persist directory (Chroma).",
     )
     parser.add_argument(
+        "--rag-service-url",
+        default=os.getenv("RAG_SERVICE_URL"),
+        help="Optional HTTP endpoint for the RAG service (for example http://rag:8000).",
+    )
+    parser.add_argument(
         "--rag-k",
         type=int,
         default=3,
@@ -401,40 +573,45 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    if args.serve:
+        import uvicorn
+
+        uvicorn.run(
+            "agent:app",
+            host="0.0.0.0",
+            port=int(os.getenv("AGENT_PORT", "9000")),
+            reload=False,
+        )
+        return
+
+    if not args.bean or not args.brewer:
+        raise SystemExit("Both --bean and --brewer are required when running in CLI mode.")
+
     bean_info = load_bean_info(args.bean)
-    references: List[Dict[str, Any]] = []
-    if args.rag_enabled:
-        try:
-            references = query_reference_recipes(
-                bean_info,
-                persist_dir=Path(args.rag_persist_dir),
-                k=args.rag_k,
-            )
-        except Exception as exc:  # pragma: no cover - best effort
-            print(f"Warning: skipping RAG references ({exc})", file=sys.stderr)
-    print("Get references: \n", references)
-    recipe = generate_recipe(
-        bean_info,
-        args.brewer,
-        reference_recipes=references,
-        custom_note=args.note,
-        model=args.model,
-        temperature=args.temperature,
-        top_p=args.top_p,
-    )
-    recipe = normalize_recipe(recipe)
-
-    # Optional validation to spot obvious issues.
     try:
-        validate_recipe(recipe)
-    except ValueError as exc:
-        raise SystemExit(f"Recipe validation failed: {exc}") from exc
+        response = brew_with_options(
+            bean_info,
+            args.brewer,
+            note=args.note,
+            rag_enabled=args.rag_enabled,
+            rag_service_url=args.rag_service_url,
+            rag_persist_dir=args.rag_persist_dir,
+            rag_k=args.rag_k,
+            model=args.model,
+            temperature=args.temperature,
+            top_p=args.top_p,
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        raise SystemExit(f"Failed to generate recipe: {exc}") from exc
 
-    output = json.dumps(recipe, ensure_ascii=False, indent=2)
+    print("References:")  # noqa: T201
+    print(json.dumps(response.references, ensure_ascii=False, indent=2))  # noqa: T201
+    output = json.dumps(response.recipe, ensure_ascii=False, indent=2)
     if args.output:
         Path(args.output).write_text(output, encoding="utf-8")
     else:
-        print(output)
+        print(output)  # noqa: T201
 
 
 if __name__ == "__main__":
