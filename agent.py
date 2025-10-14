@@ -11,6 +11,8 @@ from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from visualization_agent_v2 import CoffeeBrewVisualizationAgent
+
 try:
     import chromadb
     from chromadb.utils import embedding_functions
@@ -439,6 +441,25 @@ class BrewResponse(BaseModel):
     recipe: Dict[str, Any]
 
 
+ALLOWED_VIS_FORMATS = {"html", "mermaid", "ascii"}
+
+
+class VisualizationRequest(BaseModel):
+    recipe: Dict[str, Any] = Field(
+        ...,
+        description="Recipe JSON containing at least bean and brewing sections.",
+    )
+    formats: List[str] = Field(
+        default_factory=lambda: ["html"],
+        description="List of visualization formats to generate (choices: html, mermaid, ascii).",
+    )
+
+
+class VisualizationResponse(BaseModel):
+    outputs: Dict[str, str]
+    summary: Dict[str, Any]
+
+
 def brew_with_options(
     bean_info: Dict[str, Any],
     brewer: str,
@@ -475,9 +496,35 @@ def brew_with_options(
     return BrewResponse(references=references, recipe=recipe)
 
 
+def build_visualizations(recipe: Dict[str, Any], formats: List[str]) -> VisualizationResponse:
+    if not isinstance(recipe, dict):
+        raise ValueError("Recipe payload must be a JSON object.")
+
+    requested = formats or ["html"]
+    invalid = [fmt for fmt in requested if fmt not in ALLOWED_VIS_FORMATS]
+    if invalid:
+        raise ValueError(f"Unsupported visualization formats requested: {', '.join(invalid)}")
+
+    if "bean" not in recipe or "brewing" not in recipe:
+        raise ValueError("Recipe must include both 'bean' and 'brewing' sections.")
+
+    viz_agent = CoffeeBrewVisualizationAgent()
+    viz_agent.load_recipe(recipe)
+
+    outputs: Dict[str, str] = {}
+    if "html" in requested:
+        outputs["html"] = viz_agent.generate_html_visualization()
+    if "mermaid" in requested:
+        outputs["mermaid"] = viz_agent.generate_mermaid_flowchart()
+    if "ascii" in requested:
+        outputs["ascii"] = viz_agent.generate_ascii_flowchart()
+
+    return VisualizationResponse(outputs=outputs, summary=viz_agent.get_recipe_summary())
+
+
 app = FastAPI(
     title="DailyDrip Agent Service",
-    description="Accepts coffee bean information, consults the RAG service, and produces a brewing recipe via OpenAI.",
+    description="Accepts coffee bean information or recipes, consults the RAG service, and produces brewing plans and visualizations.",
     version="0.2.0",
 )
 
@@ -502,6 +549,20 @@ async def brew_endpoint(payload: BrewRequest) -> BrewResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/visualize", response_model=VisualizationResponse)
+async def visualize_endpoint(payload: VisualizationRequest) -> VisualizationResponse:
+    try:
+        return await run_in_threadpool(
+            build_visualizations,
+            payload.recipe,
+            payload.formats,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

@@ -11,6 +11,15 @@ run:
 	fi; \
 	exit $$status
 
+start:
+	@status=0; \
+	$(DOCKER_COMPOSE) up rag agent || status=$$?; \
+	if [ $$status -eq 130 ]; then \
+		echo "docker compose interrupted by user"; \
+		exit 0; \
+	fi; \
+	exit $$status
+
 pipeline:
 	$(DOCKER_COMPOSE) up --build ingest chunk index
 
