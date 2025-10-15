@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from visualization_agent_v2 import CoffeeBrewVisualizationAgent
+from .visualization_agent_v2 import CoffeeBrewVisualizationAgent
 
 try:
     import chromadb
@@ -72,7 +72,8 @@ Your output must be a single JSON object with this structure:
 """
 
 
-DEFAULT_RAG_PERSIST_DIR = Path(__file__).parent / "dailydrip_rag" / "indexes" / "chroma"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_RAG_PERSIST_DIR = REPO_ROOT / "dailydrip_rag" / "indexes" / "chroma"
 DEFAULT_RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL")
 RAG_COLLECTION = "coffee_chunks"
 RAG_MODEL = "all-MiniLM-L6-v2"
@@ -639,7 +640,7 @@ def main() -> None:
         import uvicorn
 
         uvicorn.run(
-            "agent:app",
+            "agent_core.agent:app",
             host="0.0.0.0",
             port=int(os.getenv("AGENT_PORT", "9000")),
             reload=False,

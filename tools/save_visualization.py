@@ -3,12 +3,15 @@ from pathlib import Path
 
 import requests
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+TOOLS_DIR = REPO_ROOT / "tools"
+
 
 def main() -> None:
     """Send a visualize request and save the HTML output to out.html."""
-    req_path = Path("visualize_request.json")
+    req_path = TOOLS_DIR / "visualize_request.json"
     if not req_path.exists():
-        raise FileNotFoundError("visualize_request.json not found in current directory.")
+        raise FileNotFoundError(f"{req_path.name} not found in repository root.")
 
     payload = json.loads(req_path.read_text(encoding="utf-8"))
 
@@ -24,8 +27,9 @@ def main() -> None:
     if not html:
         raise ValueError("HTML output missing in response.")
 
-    Path("out.html").write_text(html, encoding="utf-8")
-    print("Saved visualization to out.html")
+    output_path = REPO_ROOT / "out.html"
+    output_path.write_text(html, encoding="utf-8")
+    print(f"Saved visualization to {output_path}")
 
 
 if __name__ == "__main__":

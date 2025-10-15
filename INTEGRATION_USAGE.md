@@ -3,10 +3,10 @@
 ## Overview
 
 The integrated system connects two agents:
-1. **Core Agent** (`agent.py`) - Generates personalized coffee brewing recipes
-2. **Visualization Agent V2** (`visualization_agent_v2.py`) - Creates beautiful visualizations
+1. **Core Agent** (`agent_core/agent.py`) - Generates personalized coffee brewing recipes
+2. **Visualization Agent V2** (`agent_core/visualization_agent_v2.py`) - Creates beautiful visualizations
 
-The **Integrated Agent** (`integrated_agent.py`) combines both into a single workflow.
+The **Integrated Agent** (`agent_core/integrated_agent.py`) combines both into a single workflow.
 
 ---
 
@@ -16,7 +16,7 @@ The **Integrated Agent** (`integrated_agent.py`) combines both into a single wor
 
 ```bash
 # Generate recipe and visualization in one command
-python integrated_agent.py \
+python -m agent_core.integrated_agent \
   --bean demo_bean.json \
   --brewer V60 \
   --output-dir ./my_recipe \
@@ -34,7 +34,7 @@ This will:
 
 **Step 1: Generate Recipe**
 ```bash
-python agent.py \
+python -m agent_core.agent \
   --bean demo_bean.json \
   --brewer V60 \
   --output generated_recipe.json
@@ -42,7 +42,7 @@ python agent.py \
 
 **Step 2: Visualize Recipe**
 ```python
-from visualization_agent_v2 import CoffeeBrewVisualizationAgent
+from agent_core.visualization_agent_v2 import CoffeeBrewVisualizationAgent
 import json
 
 # Load the generated recipe
@@ -72,7 +72,7 @@ agent.save_visualization('my_recipe.html', format='html')
 ### Basic Usage
 
 ```bash
-python integrated_agent.py --bean BEAN_FILE --brewer BREWER_NAME
+python -m agent_core.integrated_agent --bean BEAN_FILE --brewer BREWER_NAME
 ```
 
 ### All Options
@@ -92,7 +92,7 @@ python integrated_agent.py --bean BEAN_FILE --brewer BREWER_NAME
 ### Complete Example
 
 ```bash
-python integrated_agent.py \
+python -m agent_core.integrated_agent \
   --bean demo_bean.json \
   --brewer Origami \
   --note "I want a sweeter cup with medium body" \
@@ -110,7 +110,7 @@ python integrated_agent.py \
 ### Using Integrated Agent in Python
 
 ```python
-from integrated_agent import IntegratedCoffeeAgent
+from agent_core.integrated_agent import IntegratedCoffeeAgent
 from pathlib import Path
 
 # Create agent
@@ -146,7 +146,7 @@ html_content = visualizations["html"]
 ### Using Only Recipe Generation
 
 ```python
-from integrated_agent import IntegratedCoffeeAgent
+from agent_core.integrated_agent import IntegratedCoffeeAgent
 import json
 
 agent = IntegratedCoffeeAgent()
@@ -168,7 +168,7 @@ print(json.dumps(recipe, indent=2))
 ### Using Only Visualization
 
 ```python
-from visualization_agent_v2 import CoffeeBrewVisualizationAgent
+from agent_core.visualization_agent_v2 import CoffeeBrewVisualizationAgent
 
 # Prepare complete recipe (with bean, brewing, evaluation)
 recipe = {
@@ -230,7 +230,7 @@ agent.save_visualization('colombia.html', format='html')
 python visualization_agent_v2.py
 
 # Test full integration (requires API key)
-python integrated_agent.py --bean demo_bean.json --brewer V60 --no-rag
+python -m agent_core.integrated_agent --bean demo_bean.json --brewer V60 --no-rag
 ```
 
 ---

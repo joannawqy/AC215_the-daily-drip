@@ -1,0 +1,32 @@
+{
+  "recipe": {
+    "bean": {
+      "name": "Ethiopia Yirgacheffe Washed",
+      "process": "Washed",
+      "variety": "Heirloom",
+      "region": "Ethiopia",
+      "roast_level": 0,
+      "roasted_days": 20,
+      "altitude": 2100,
+      "flavor_notes": [
+        "lemon",
+        "jasmine",
+        "tea-like"
+      ]
+    },
+    "brewing": {
+      "brewer": "V60",
+      "temperature": 95,
+      "grinding_size": 19,
+      "dose": 14,
+      "target_water": 238,
+      "pours": [
+        {"start": 0, "end": 30, "water_added": 40},
+        {"start": 30, "end": 60, "water_added": 80},
+        {"start": 60, "end": 90, "water_added": 60},
+        {"start": 90, "end": 120, "water_added": 58}
+      ]
+    }
+  },
+  "formats": ["html"]
+}

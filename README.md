@@ -60,17 +60,17 @@ Health check: `GET /healthz`.
 ## Agent HTTP Service
 The container starts the FastAPI application automatically:
 ```bash
-uvicorn agent:app --host 0.0.0.0 --port 9000
+uvicorn agent_core.agent:app --host 0.0.0.0 --port 9000
 ```
 
 Example request:
 ```bash
 curl -X POST http://localhost:9000/brew \
   -H "Content-Type: application/json" \
-  -d @bean_request.json
+  -d @tools/bean_request.json
 ```
 
-Example `bean_request.json`:
+Example `tools/bean_request.json`:
 ```json
 {
   "bean": { "...": "..." },
@@ -82,7 +82,7 @@ Example `bean_request.json`:
 
 The response contains a `references` array (retrieved recipes) and a `recipe` object (final brewing plan). To run the CLI outside Docker:
 ```bash
-python agent.py --bean bean.json --brewer V60 \
+python -m agent_core.agent --bean bean.json --brewer V60 \
   --rag-service-url http://localhost:8000
 ```
 
@@ -93,10 +93,10 @@ Once you have a recipe (for example, from the `/brew` response), you can request
 ```bash
 curl -X POST http://localhost:9000/visualize \
   -H "Content-Type: application/json" \
-  -d @visualize_request.json
+  -d @tools/visualize_request.json
 ```
 
-Example `visualize_request.json`:
+Example `tools/visualize_request.json`:
 ```json
 {
   "recipe": {
@@ -121,23 +121,23 @@ The response returns an `outputs` dictionary containing the requested formats (`
    ```bash
    curl -s -X POST http://localhost:9000/brew \
      -H "Content-Type: application/json" \
-     -d @bean_request.json \
+     -d @tools/bean_request.json \
      -o response.json
    ```
 3. **Prepare visualization payload** using the recipe:
    ```bash
-   jq '{recipe: .recipe, formats: ["html"]}' response.json > visualize_request.json
+   jq '{recipe: .recipe, formats: ["html"]}' response.json > tools/visualize_request.json
    ```
 4. **Generate visualization via HTTP** (optional):
    ```bash
    curl -s -X POST http://localhost:9000/visualize \
      -H "Content-Type: application/json" \
-     -d @visualize_request.json \
+     -d @tools/visualize_request.json \
      -o visualize_response.json
    jq -r '.outputs.html' visualize_response.json > out.html
    ```
 5. **Or run helper script** to get `out.html` directly:
    ```bash
-   python save_visualization.py
+   python tools/save_visualization.py
    ```
 6. Open `out.html` in a browser to view the rendered brew timeline.

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 # Import core agent functions
-from agent import (
+from .agent import (
     load_bean_info,
     generate_recipe,
     normalize_recipe,
@@ -20,7 +20,7 @@ from agent import (
 )
 
 # Import visualization agent
-from visualization_agent import CoffeeBrewVisualizationAgent
+from .visualization_agent_v2 import CoffeeBrewVisualizationAgent
 
 
 class IntegratedCoffeeAgent:
