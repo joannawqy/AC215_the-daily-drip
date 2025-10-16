@@ -39,7 +39,8 @@ The milestone repository is organized around three main areas: data/RAG assets, 
 │   ├── indexes/chroma/ 
 │   ├── Dockerfile                 # RAG service image
 │   └── src/                       # Ingest/chunk/index/service code
-├── reports/                       
+├── reports/
+│   └── MS2 Report.pdf      # Report of MS2 with some screenshots proving functionality                  
 ├── tools/
 │   ├── bean_request.json          # Sample brew request payload
 │   ├── visualize_request.json     # Sample visualization payload
