@@ -1,143 +1,130 @@
-# Daily Drip RAG Pipeline
+# AC215 – Milestone 2 – DailyDrip
 
-## Prerequisites
-- Docker and Docker Compose v2
-- `OPENAI_API_KEY` exported in the shell before running the agent or service
+> Never commit large data files, trained models, or personal API keys/secrets to GitHub.
 
-## One-Command Pipeline
-Build and run the full workflow (raw data → preprocessing → vector index → RAG API → agent):
+## Team
+- **Team Name:** DailyDrip Collective  
+- **Members:** *Update with your Harvard IDs / names here*
+
+## Background & Motivation
+Coffee brewing is both an art and a science. Enthusiasts often struggle to dial in grind size, water ratio, pour schedule, and temperature to match their taste preferences. Keeping track of experiments can be overwhelming, especially when juggling multiple beans and brewers.
+
+DailyDrip combines consumer preference data, brewing logs, and generative AI to build a practical assistant that makes everyday coffee brewing easier, more personalized, and more enjoyable. The project targets three coordinated capabilities:
+1. **Brewing recipe agent** – recommends brewing parameters tailored to taste goals.
+2. **Visualization agent** – renders recipes as timelines that clarify pour cadence and amounts.
+3. **RAG-style knowledge base** – stores beans and past brews to ground future recommendations.
+
+## Project Scope (Milestone 2)
+- Implement a FastAPI brewing agent that generates complete JSON recipes from bean metadata.
+- Provide a visualization agent that converts recipes into HTML/Mermaid/ASCII timelines.
+- Maintain a Retrieval-Augmented Generation (RAG) pipeline (ingest → chunk → index → serve) to surface reference brews during recipe generation.
+- Package the system in Docker containers and deliver reproducible commands for local testing.
+
+## Repository Organization
+The milestone repository is organized around three main areas: data/RAG assets, agent code, and tooling.
+
+```
+├── README.md                      # Milestone report & usage guide
+├── Makefile                       # Convenience targets for Docker workflows
+├── docker-compose.yml             # Orchestrates RAG + agent containers
+├── Dockerfile.agent               # Runtime image for the brewing/visualization API
+├── agent_core/                    # Core Python package
+│   ├── __init__.py
+│   ├── agent.py                   # FastAPI brewing agent + CLI entrypoint
+│   ├── agent_requirements.txt     # Python dependencies for agent container
+│   ├── integrated_agent.py        # A test integration script of two agents
+│   └── visualization_agent_v2.py  # Visualization agent
+├── dailydrip_rag/                 # RAG Data pipeline (ingest, chunk, index, service)
+│   ├── data/processed/
+│   ├── indexes/chroma/ 
+│   ├── Dockerfile                 # RAG service image
+│   └── src/                       # Ingest/chunk/index/service code
+├── reports/                       
+├── tools/
+│   ├── bean_request.json          # Sample brew request payload
+│   ├── visualize_request.json     # Sample visualization payload
+│   └── save_visualization.py      # Helper to fetch HTML visualization
+
+```
+
+> **Note:** `dailydrip_rag/data` and `dailydrip_rag/indexes` contain *small* illustrative artifacts only. Do **not** commit large datasets or full production indexes.
+
+## Data Sources
+- **Bean Profiles:** curated JSON snippets describing origin, process, roast, altitude, and flavor notes (synthetic samples for Milestone 2).
+- **Brew Logs:** summarized pour-over recipes used to seed the RAG database (stored via JSONL in `dailydrip_rag/data/processed` for demo purposes).
+- **External References:** literature and blog resources on pour-over techniques (catalogued in `references/`, not committed). Large datasets remain on private storage; only toy samples are included locally.
+
+## Data & Model Pipeline
+1. **Ingest (`dailydrip_rag/src/ingest`)** – normalizes raw bean/brew logs into canonical JSONL records.
+2. **Chunk (`dailydrip_rag/src/chunk`)** – slices records into text chunks suited for embedding.
+3. **Index (`dailydrip_rag/src/index`)** – builds a Chroma vector index persisted under `dailydrip_rag/indexes/chroma`.
+4. **RAG Service (`dailydrip_rag/src/service`)** – exposes REST endpoints to retrieve nearest-neighbor brews for a query bean.
+
+All three steps run via Docker using the Makefile targets described below.
+
+## Agents & Models
+- **Brew Agent (`agent_core/agent.py`)**  
+  - FastAPI application with `/brew` and `/visualize` endpoints plus a CLI (`python -m agent_core.agent`).  
+  - Calls OpenAI’s API (mocked locally) and consults the RAG service when available.  
+  - Outputs normalized JSON recipes with validation.
+- **Visualization Agent (`agent_core/visualization_agent_v2.py`)**  
+  - Generates HTML, Mermaid, and ASCII visual timelines from a recipe dict.  
+  - Packaged as a library callable from the brew agent or standalone scripts.
+- **Integrated Agent (`agent_core/integrated_agent.py`)**  
+  - End-to-end workflow that loads bean data, queries RAG, produces a recipe, and renders visualizations.
+
+## Running the System with Docker
+
+### Prerequisites
+- Docker & Docker Compose v2
+- `OPENAI_API_KEY` set in environment (or use a mock key when running offline)
+
+### Full Pipeline (build + ingest + agent)
 ```bash
-make run
+make run               # builds images, runs ingest → chunk → index, then starts RAG + agent
 ```
-This is equivalent to `docker compose up --build agent`. The first run builds the images, executes ingest → chunk → index sequentially, and then keeps both the RAG and agent services running. Outputs are written to `dailydrip_rag/data/processed` and `dailydrip_rag/indexes/chroma`.
 
-To refresh the index without starting the long-running services:
+### Targeted Operations
 ```bash
-make pipeline    # run ingest → chunk → index only
-make rag         # build and start just the RAG API (index must exist)
-make down        # stop all containers
+make pipeline          # ingest → chunk → index only (refresh embeddings)
+make rag               # build and run only the RAG API service
+make start             # start RAG + agent without rebuilding
+make down              # stop all containers
 ```
 
-## Services
-- `ingest`: parse the source CSV/JSON/JSONL files into normalized records.
-- `chunk`: slice records into manageable chunks ready for embedding.
-- `index`: build and persist the Chroma vector index.
-- `rag`: FastAPI service exposing `POST /rag` for retrieval.
-- `agent`: FastAPI service that queries the RAG API and OpenAI to return a brewing plan, and can visualize recipes.
-
-All services share the volumes `dailydrip_rag/data` and `dailydrip_rag/indexes`. By default, the RAG API listens on `http://localhost:8000` and the agent API listens on `http://localhost:9000`.
-
-## RAG Service API
-```
-POST /rag
-{
-  "bean": {...},        # or provide a full record / free-text query
-  "record": {...},
-  "query": "free-form text",
-  "k": 3
-}
-```
-
-Sample response:
-```json
-{
-  "query": "bean.name: ...",
-  "results": [
-    {
-      "rank": 1,
-      "id": "record-123",
-      "distance": 0.12,
-      "bean_text": "bean.name: ...",
-      "brewing": { "...": "..." },
-      "evaluation": { "...": "..." }
-    }
-  ]
-}
-```
-
-Health check: `GET /healthz`.
-
-## Agent HTTP Service
-The container starts the FastAPI application automatically:
-```bash
-uvicorn agent_core.agent:app --host 0.0.0.0 --port 9000
-```
-
-Example request:
+### Brew API Usage
 ```bash
 curl -X POST http://localhost:9000/brew \
   -H "Content-Type: application/json" \
   -d @tools/bean_request.json
 ```
 
-Example `tools/bean_request.json`:
-```json
-{
-  "bean": { "...": "..." },
-  "brewer": "V60",
-  "note": "Prefer sweeter cups and a three-stage pour",
-  "rag_k": 3
-}
-```
-
-The response contains a `references` array (retrieved recipes) and a `recipe` object (final brewing plan). To run the CLI outside Docker:
-```bash
-python -m agent_core.agent --bean bean.json --brewer V60 \
-  --rag-service-url http://localhost:8000
-```
-
-Adding `--serve` switches the CLI into HTTP service mode.
-
-## Visualization Endpoint
-Once you have a recipe (for example, from the `/brew` response), you can request visual assets:
+### Visualization Endpoint
 ```bash
 curl -X POST http://localhost:9000/visualize \
   -H "Content-Type: application/json" \
   -d @tools/visualize_request.json
 ```
 
-Example `tools/visualize_request.json`:
-```json
-{
-  "recipe": {
-    "bean": { "...": "..." },
-    "brewing": { "...": "..." }
-  },
-  "formats": ["html", "mermaid"]
-}
+### CLI (Outside Docker)
+```bash
+python -m agent_core.agent \
+  --bean bean.json \
+  --brewer V60 \
+  --rag-service-url http://localhost:8000
 ```
 
-The response returns an `outputs` dictionary containing the requested formats (`html`, `mermaid`, `ascii`) and a `summary` block describing the brew. The HTML result can be saved to a file for viewing in a browser.
+### Visualization Demo Script
+```bash
+python tools/save_visualization.py   # saves HTML to out.html using sample payload
+```
 
-## End-to-End Workflow Example
-1. **Start services** (after `make run` has built images once):
-   ```bash
-   # Option A: reuse containers without rebuilding
-   OPENAI_API_KEY=your_key make start
-   # Option B: same effect without Make
-   OPENAI_API_KEY=your_key docker compose up rag agent
-   ```
-2. **Request a recipe** (save to `response.json`):
-   ```bash
-   curl -s -X POST http://localhost:9000/brew \
-     -H "Content-Type: application/json" \
-     -d @tools/bean_request.json \
-     -o response.json
-   ```
-3. **Prepare visualization payload** using the recipe:
-   ```bash
-   jq '{recipe: .recipe, formats: ["html"]}' response.json > tools/visualize_request.json
-   ```
-4. **Generate visualization via HTTP** (optional):
-   ```bash
-   curl -s -X POST http://localhost:9000/visualize \
-     -H "Content-Type: application/json" \
-     -d @tools/visualize_request.json \
-     -o visualize_response.json
-   jq -r '.outputs.html' visualize_response.json > out.html
-   ```
-5. **Or run helper script** to get `out.html` directly:
-   ```bash
-   python tools/save_visualization.py
-   ```
-6. Open `out.html` in a browser to view the rendered brew timeline.
+## Validation & Deliverables
+- **Functional Demo:** `/brew` → recipe JSON, `/visualize` → HTML timeline (example stored in `out.html`).
+- **RAG Integration:** agent gracefully falls back when RAG is offline; retrieval logs stored in container output.
+- **Documentation:** this README + `reports/Statement_of_Work.pdf` describe scope, objectives, and setup.
+
+## Next Steps (Beyond Milestone 2)
+1. Collect real user brewing logs and expand RAG coverage.
+2. Integrate feedback loop for recipe evaluation and adaptation.
+3. Build a lightweight UI to collect preferences and display visualizations interactively.
