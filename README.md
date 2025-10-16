@@ -50,12 +50,7 @@ The milestone repository is organized around three main areas: data/RAG assets, 
 
 > **Note:** `dailydrip_rag/data` and `dailydrip_rag/indexes` contain *small* illustrative artifacts only. Do **not** commit large datasets or full production indexes.
 
-## Data Sources
-- **Bean Profiles:** curated JSON snippets describing origin, process, roast, altitude, and flavor notes (synthetic samples for Milestone 2).
-- **Brew Logs:** summarized pour-over recipes used to seed the RAG database (stored via JSONL in `dailydrip_rag/data/processed` for demo purposes).
-- **External References:** literature and blog resources on pour-over techniques (catalogued in `references/`, not committed). Large datasets remain on private storage; only toy samples are included locally.
-
-## Data & Model Pipeline
+## RAG Pipeline
 1. **Ingest (`dailydrip_rag/src/ingest`)** – normalizes raw bean/brew logs into canonical JSONL records.
 2. **Chunk (`dailydrip_rag/src/chunk`)** – slices records into text chunks suited for embedding.
 3. **Index (`dailydrip_rag/src/index`)** – builds a Chroma vector index persisted under `dailydrip_rag/indexes/chroma`.
