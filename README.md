@@ -1,10 +1,8 @@
 # AC215 – Milestone 2 – DailyDrip
 
-> Never commit large data files, trained models, or personal API keys/secrets to GitHub.
-
 ## Team
 - **Team Name:** DailyDrip Collective  
-- **Members:** *Update with your Harvard IDs / names here*
+- **Members:** Even Li, Joanna Wang, Jessica Wang, Zicheng Ma
 
 ## Background & Motivation
 Coffee brewing is both an art and a science. Enthusiasts often struggle to dial in grind size, water ratio, pour schedule, and temperature to match their taste preferences. Keeping track of experiments can be overwhelming, especially when juggling multiple beans and brewers.
