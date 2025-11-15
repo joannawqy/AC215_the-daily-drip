@@ -32,6 +32,7 @@ The milestone repository is organized around three main areas: data/RAG assets, 
 │   ├── agent_requirements.txt     # Python dependencies for agent container
 │   ├── integrated_agent.py        # A test integration script of two agents
 │   └── visualization_agent_v2.py  # Visualization agent
+├── frontend/                      # React + Tailwind UI for interacting with the agent
 ├── dailydrip_rag/                 # RAG Data pipeline (ingest, chunk, index, service)
 │   ├── data/processed/
 │   ├── indexes/chroma/ 
@@ -47,6 +48,37 @@ The milestone repository is organized around three main areas: data/RAG assets, 
 ```
 
 > **Note:** `dailydrip_rag/data` and `dailydrip_rag/indexes` contain *small* illustrative artifacts only. Do **not** commit large datasets or full production indexes.
+
+## Frontend Companion App
+The `frontend/` directory hosts a Create React App + Tailwind UI that connects directly to the FastAPI agent.
+
+### Local Development
+1. Start the agent service (for example with Docker or `python -m agent_core.agent --serve`).
+2. Install frontend dependencies:
+   ```bash
+   cd frontend
+   npm install
+   ```
+3. (Optional) Point the UI to a custom backend:
+   ```bash
+   export REACT_APP_AGENT_API_URL="http://localhost:9000"
+   ```
+4. Launch the UI:
+   ```bash
+   npm start
+   ```
+
+> **Note:** The frontend tooling targets Node 16+. If you must run on an older Node runtime (e.g., 10.x), set `DISABLE_ESLINT_PLUGIN=true` before `npm start` (already configured via `frontend/.env`) or upgrade Node for full lint support.
+
+The UI now supports account registration/login, a per-user bean library, and recipe generation from saved beans or manual inputs. Adjust `FRONTEND_ORIGINS` on the backend to customize allowed CORS origins and use `REACT_APP_AGENT_API_URL` to point the frontend at a non-localhost backend.
+
+### Authentication & Bean Storage API
+- `POST /auth/register` / `POST /auth/login`: issue a session token (simple header `X-Auth-Token`) and return the user profile.
+- `GET /profile`, `PUT /profile/preferences`: retrieve and update a user’s flavor notes + roast level preferences.
+- `GET /beans`, `POST /beans`, `PUT /beans/{id}`, `DELETE /beans/{id}`: manage the authenticated user’s bean library.
+- Bean payloads accept `roasted_on` (ISO date). The service derives `roasted_days` from that stamp on every request so recipes always see an up-to-date rest time.
+
+User records are persisted to a lightweight JSONL store at `data/user_store.jsonl`. Each record keeps hashed credentials, preferences, and beans so that sessions survive restarts during development.
 
 ## RAG Pipeline
 1. **Ingest (`dailydrip_rag/src/ingest`)** – normalizes raw bean/brew logs into canonical JSONL records.

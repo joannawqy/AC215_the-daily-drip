@@ -1,15 +1,23 @@
+from __future__ import annotations
+
 import argparse
+import hashlib
 import json
 import os
+import secrets
 import sys
+import threading
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from .visualization_agent_v2 import CoffeeBrewVisualizationAgent
 
@@ -87,6 +95,139 @@ BEAN_COLUMNS = [
     "bean.altitude",
     "bean.flavor_notes",
 ]
+
+DATA_DIR = REPO_ROOT / "data"
+USER_STORE_PATH = DATA_DIR / "user_store.jsonl"
+
+_user_store_lock = threading.Lock()
+_user_store: Dict[str, Dict[str, Any]] = {}
+_email_index: Dict[str, str] = {}
+_active_tokens: Dict[str, str] = {}
+
+
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _compute_roasted_days(roasted_on: Optional[str]) -> Optional[int]:
+    if not roasted_on:
+        return None
+    try:
+        roasted_date = datetime.fromisoformat(roasted_on).date()
+    except ValueError:
+        return None
+    delta = (datetime.utcnow().date() - roasted_date).days
+    return max(delta, 0)
+
+
+def _normalize_roast_fields(bean: Dict[str, Any]) -> Dict[str, Any]:
+    roasted_on = bean.get("roasted_on")
+    computed = _compute_roasted_days(roasted_on)
+    if computed is not None:
+        bean["roasted_days"] = computed
+    elif bean.get("roasted_days") is None:
+        bean.pop("roasted_days", None)
+    return bean
+
+
+def _load_user_store() -> None:
+    with _user_store_lock:
+        _user_store.clear()
+        _email_index.clear()
+        if not USER_STORE_PATH.exists():
+            return
+        with USER_STORE_PATH.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                payload = line.strip()
+                if not payload:
+                    continue
+                try:
+                    record = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                user_id = record.get("user_id")
+                email = record.get("email")
+                if not user_id or not email:
+                    continue
+                record.setdefault("preferences", {"flavor_notes": [], "roast_level": None})
+                record.setdefault("beans", [])
+                _user_store[user_id] = record
+                _email_index[email.lower()] = user_id
+
+
+def _persist_user_store() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with USER_STORE_PATH.open("w", encoding="utf-8") as handle:
+        for record in _user_store.values():
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _issue_token(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    _active_tokens[token] = user_id
+    return token
+
+
+def _format_bean_record(bean: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = _normalize_roast_fields(dict(bean))
+    return {
+        "bean_id": normalized["bean_id"],
+        "name": normalized.get("name"),
+        "origin": normalized.get("origin"),
+        "process": normalized.get("process"),
+        "variety": normalized.get("variety"),
+        "roast_level": normalized.get("roast_level"),
+        "roasted_on": normalized.get("roasted_on"),
+        "roasted_days": normalized.get("roasted_days"),
+        "altitude": normalized.get("altitude"),
+        "flavor_notes": normalized.get("flavor_notes", []),
+        "created_at": normalized.get("created_at"),
+        "updated_at": normalized.get("updated_at"),
+    }
+
+
+def _clean_flavor_notes(notes: Optional[List[str]]) -> List[str]:
+    if not notes:
+        return []
+    return [note.strip() for note in notes if isinstance(note, str) and note.strip()]
+
+
+def _user_to_public_payload(user: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "user_id": user["user_id"],
+        "email": user["email"],
+        "display_name": user.get("display_name"),
+        "preferences": user.get("preferences", {"flavor_notes": [], "roast_level": None}),
+        "beans": [_format_bean_record(bean) for bean in user.get("beans", [])],
+        "created_at": user.get("created_at"),
+        "updated_at": user.get("updated_at"),
+    }
+
+
+def _require_authenticated_user(token: Optional[str]) -> Dict[str, Any]:
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authentication token.")
+    user_id = _active_tokens.get(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+    user = _user_store.get(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found.")
+    return user
+
+
+def get_authenticated_user(
+    authorization: Optional[str] = Header(None),
+    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+) -> Dict[str, Any]:
+    token = x_auth_token
+    if not token and authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
+        else:
+            token = authorization
+    return _require_authenticated_user(token)
 
 
 def load_bean_info(bean_source: str) -> Dict[str, Any]:
@@ -461,6 +602,94 @@ class VisualizationResponse(BaseModel):
     summary: Dict[str, Any]
 
 
+class UserPreferences(BaseModel):
+    flavor_notes: List[str] = Field(
+        default_factory=list,
+        description="Preferred flavor notes captured as free-form strings.",
+    )
+    roast_level: Optional[str] = Field(
+        default=None,
+        description="Preferred roast level descriptor.",
+    )
+
+
+class UserSummary(BaseModel):
+    user_id: str
+    email: EmailStr
+    display_name: Optional[str]
+    preferences: UserPreferences
+    beans: List[BeanRecord]
+    created_at: Optional[str]
+    updated_at: Optional[str]
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserSummary
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    display_name: Optional[str]
+    preferences: Optional[UserPreferences]
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+
+
+class PreferencesUpdateRequest(BaseModel):
+    flavor_notes: List[str] = Field(default_factory=list)
+    roast_level: Optional[str] = None
+
+
+class BeanPayload(BaseModel):
+    name: str = Field(..., min_length=1, description="Bean name.")
+    origin: Optional[str] = Field(default=None, description="Origin or region.")
+    process: Optional[str] = Field(default=None, description="Processing method.")
+    variety: Optional[str] = Field(default=None, description="Variety or cultivar.")
+    roasted_on: Optional[str] = Field(
+        default=None,
+        description="Roast date in ISO format (YYYY-MM-DD).",
+    )
+    roast_level: Optional[int] = Field(
+        default=None,
+        description="Roast level indicator, typically 0-5.",
+    )
+    roasted_days: Optional[int] = Field(
+        default=None,
+        description="Days since roast.",
+    )
+    altitude: Optional[int] = Field(
+        default=None,
+        description="Growing altitude in masl.",
+    )
+    flavor_notes: List[str] = Field(
+        default_factory=list,
+        description="Collection of flavor notes.",
+    )
+
+
+class BeanRecord(BeanPayload):
+    bean_id: str
+    created_at: str
+    updated_at: str
+
+
+class BeanCreateRequest(BaseModel):
+    bean: BeanPayload
+
+
+class BeanUpdateRequest(BaseModel):
+    bean: BeanPayload
+
+
+class BeansResponse(BaseModel):
+    beans: List[BeanRecord]
+
+
 def brew_with_options(
     bean_info: Dict[str, Any],
     brewer: str,
@@ -474,6 +703,14 @@ def brew_with_options(
     temperature: float,
     top_p: float,
 ) -> BrewResponse:
+    bean_info = _normalize_roast_fields(dict(bean_info))
+    flavors = bean_info.get("flavor_notes")
+    if isinstance(flavors, str):
+        bean_info["flavor_notes"] = _clean_flavor_notes([note.strip() for note in flavors.split(",")])
+    elif not isinstance(flavors, list):
+        bean_info["flavor_notes"] = []
+    else:
+        bean_info["flavor_notes"] = _clean_flavor_notes(flavors)
     references: List[Dict[str, Any]] = []
     if rag_enabled:
         references = query_reference_recipes(
@@ -528,6 +765,186 @@ app = FastAPI(
     description="Accepts coffee bean information or recipes, consults the RAG service, and produces brewing plans and visualizations.",
     version="0.2.0",
 )
+
+_default_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+_configured_origins = os.getenv("FRONTEND_ORIGINS")
+if _configured_origins:
+    origins = [origin.strip() for origin in _configured_origins.split(",") if origin.strip()]
+else:
+    origins = _default_origins
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins or ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+def _load_store_on_startup() -> None:
+    _load_user_store()
+
+
+@app.post("/auth/register", response_model=AuthResponse)
+def register_user(payload: RegisterRequest) -> AuthResponse:
+    email_key = payload.email.lower()
+    with _user_store_lock:
+        if email_key in _email_index:
+            raise HTTPException(status_code=409, detail="Email already registered.")
+        user_id = str(uuid4())
+        now = datetime.utcnow().isoformat()
+        preferences = payload.preferences.dict() if payload.preferences else {}
+        flavor_notes = _clean_flavor_notes(preferences.get("flavor_notes"))
+        roast_level = preferences.get("roast_level")
+        user_record = {
+            "user_id": user_id,
+            "email": payload.email,
+            "display_name": payload.display_name or payload.email.split("@")[0],
+            "password_hash": _hash_password(payload.password),
+            "preferences": {
+                "flavor_notes": flavor_notes,
+                "roast_level": roast_level,
+            },
+            "beans": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+        _user_store[user_id] = user_record
+        _email_index[email_key] = user_id
+        _persist_user_store()
+    token = _issue_token(user_id)
+    return AuthResponse(token=token, user=UserSummary(**_user_to_public_payload(user_record)))
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login_user(payload: LoginRequest) -> AuthResponse:
+    email_key = payload.email.lower()
+    with _user_store_lock:
+        user_id = _email_index.get(email_key)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
+        user_record = _user_store.get(user_id)
+    if not user_record or user_record.get("password_hash") != _hash_password(payload.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
+    token = _issue_token(user_record["user_id"])
+    return AuthResponse(token=token, user=UserSummary(**_user_to_public_payload(user_record)))
+
+
+@app.get("/profile", response_model=UserSummary)
+def get_profile(current_user: Dict[str, Any] = Depends(get_authenticated_user)) -> UserSummary:
+    return UserSummary(**_user_to_public_payload(current_user))
+
+
+@app.put("/profile/preferences", response_model=UserSummary)
+def update_preferences(
+    payload: PreferencesUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_authenticated_user),
+) -> UserSummary:
+    user_id = current_user["user_id"]
+    flavor_notes = _clean_flavor_notes(payload.flavor_notes)
+    with _user_store_lock:
+        user_record = _user_store[user_id]
+        user_record["preferences"] = {
+            "flavor_notes": flavor_notes,
+            "roast_level": payload.roast_level,
+        }
+        user_record["updated_at"] = datetime.utcnow().isoformat()
+        _persist_user_store()
+    return UserSummary(**_user_to_public_payload(user_record))
+
+
+def _get_user_beans(user_record: Dict[str, Any]) -> List[Dict[str, Any]]:
+    beans = user_record.setdefault("beans", [])
+    return beans
+
+
+@app.get("/beans", response_model=BeansResponse)
+def list_beans(current_user: Dict[str, Any] = Depends(get_authenticated_user)) -> BeansResponse:
+    beans = _get_user_beans(current_user)
+    dirty = False
+    formatted: List[Dict[str, Any]] = []
+    for bean in beans:
+        before = bean.get("roasted_days")
+        _normalize_roast_fields(bean)
+        if bean.get("roasted_days") != before:
+            dirty = True
+        formatted.append(_format_bean_record(bean))
+    if dirty:
+        current_user["updated_at"] = datetime.utcnow().isoformat()
+        _persist_user_store()
+    return BeansResponse(beans=formatted)
+
+
+@app.post("/beans", response_model=BeanRecord, status_code=status.HTTP_201_CREATED)
+def create_bean(
+    payload: BeanCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_authenticated_user),
+) -> BeanRecord:
+    bean_data = payload.bean.dict()
+    bean_data["flavor_notes"] = _clean_flavor_notes(bean_data.get("flavor_notes"))
+    bean_data = _normalize_roast_fields(bean_data)
+    bean_id = str(uuid4())
+    now = datetime.utcnow().isoformat()
+    bean_record = {
+        **bean_data,
+        "bean_id": bean_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    user_id = current_user["user_id"]
+    with _user_store_lock:
+        user_record = _user_store[user_id]
+        beans = _get_user_beans(user_record)
+        beans.append(bean_record)
+        user_record["updated_at"] = now
+        _persist_user_store()
+    return BeanRecord(**_format_bean_record(bean_record))
+
+
+@app.put("/beans/{bean_id}", response_model=BeanRecord)
+def update_bean(
+    bean_id: str,
+    payload: BeanUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_authenticated_user),
+) -> BeanRecord:
+    bean_data = payload.bean.dict()
+    bean_data["flavor_notes"] = _clean_flavor_notes(bean_data.get("flavor_notes"))
+    bean_data = _normalize_roast_fields(bean_data)
+    now = datetime.utcnow().isoformat()
+    user_id = current_user["user_id"]
+    with _user_store_lock:
+        user_record = _user_store[user_id]
+        beans = _get_user_beans(user_record)
+        for bean in beans:
+            if bean["bean_id"] == bean_id:
+                bean.update(bean_data)
+                bean["updated_at"] = now
+                user_record["updated_at"] = now
+                _persist_user_store()
+                return BeanRecord(**_format_bean_record(bean))
+    raise HTTPException(status_code=404, detail="Bean not found.")
+
+
+@app.delete("/beans/{bean_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_bean(
+    bean_id: str,
+    current_user: Dict[str, Any] = Depends(get_authenticated_user),
+) -> None:
+    user_id = current_user["user_id"]
+    with _user_store_lock:
+        user_record = _user_store[user_id]
+        beans = _get_user_beans(user_record)
+        remaining = [bean for bean in beans if bean["bean_id"] != bean_id]
+        if len(remaining) == len(beans):
+            raise HTTPException(status_code=404, detail="Bean not found.")
+        user_record["beans"] = remaining
+        user_record["updated_at"] = datetime.utcnow().isoformat()
+        _persist_user_store()
 
 
 @app.post("/brew", response_model=BrewResponse)
