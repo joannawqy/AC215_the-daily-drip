@@ -134,6 +134,7 @@ def _load_user_store() -> None:
     with _user_store_lock:
         _user_store.clear()
         _email_index.clear()
+        dirty = False
         if not USER_STORE_PATH.exists():
             return
         with USER_STORE_PATH.open("r", encoding="utf-8") as handle:
@@ -151,8 +152,14 @@ def _load_user_store() -> None:
                     continue
                 record.setdefault("preferences", {"flavor_notes": [], "roast_level": None})
                 record.setdefault("beans", [])
+                if not record.get("password_hash") and record.get("password"):
+                    record["password_hash"] = _hash_password(record["password"])
+                    record.pop("password", None)
+                    dirty = True
                 _user_store[user_id] = record
                 _email_index[email.lower()] = user_id
+        if dirty:
+            _persist_user_store()
 
 
 def _persist_user_store() -> None:

@@ -239,7 +239,7 @@ class CoffeeBrewVisualizationAgent:
 
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #fdf8f6 0%, #f2e8e5 100%);
             padding: 20px;
             min-height: 100vh;
         }}
@@ -286,7 +286,7 @@ class CoffeeBrewVisualizationAgent:
             background: #f8f9fa;
             padding: 20px;
             border-radius: 10px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #b27946;
         }}
 
         .info-card h3 {{
@@ -299,7 +299,7 @@ class CoffeeBrewVisualizationAgent:
 
         .info-card .value {{
             font-size: 1.5em;
-            color: #667eea;
+            color: #744527;
             font-weight: bold;
         }}
 
@@ -326,9 +326,9 @@ class CoffeeBrewVisualizationAgent:
             left: 0;
             right: 0;
             height: 4px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #d9b28c 0%, #744527 100%);
             border-radius: 2px;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 2px 8px rgba(116, 69, 39, 0.25);
         }}
 
         .timeline-event {{
@@ -344,10 +344,10 @@ class CoffeeBrewVisualizationAgent:
             width: 16px;
             height: 16px;
             background: white;
-            border: 4px solid #667eea;
+            border: 4px solid #b27946;
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 2px 8px rgba(116, 69, 39, 0.35);
             z-index: 2;
             transition: all 0.3s ease;
         }}
@@ -374,7 +374,7 @@ class CoffeeBrewVisualizationAgent:
 
         .timeline-event:hover .event-label {{
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-            border-color: #667eea;
+            border-color: #b27946;
         }}
 
         .timeline-event.above .event-label {{
@@ -392,7 +392,7 @@ class CoffeeBrewVisualizationAgent:
 
         .event-time {{
             font-size: 14px;
-            color: #667eea;
+            color: #744527;
             font-weight: bold;
             margin-bottom: 3px;
         }}
@@ -442,7 +442,7 @@ class CoffeeBrewVisualizationAgent:
         .timeline-marker {{
             width: 40px;
             height: 40px;
-            background: #667eea;
+            background: #b27946;
             color: white;
             border-radius: 50%;
             display: flex;
@@ -450,7 +450,7 @@ class CoffeeBrewVisualizationAgent:
             justify-content: center;
             font-weight: bold;
             flex-shrink: 0;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 2px 8px rgba(116, 69, 39, 0.35);
         }}
 
         .timeline-content {{
@@ -458,7 +458,7 @@ class CoffeeBrewVisualizationAgent:
             background: #f8f9fa;
             padding: 20px;
             border-radius: 10px;
-            border-left: 3px solid #667eea;
+            border-left: 3px solid #b27946;
             transition: all 0.3s ease;
         }}
 
@@ -480,7 +480,7 @@ class CoffeeBrewVisualizationAgent:
         }}
 
         .timeline-time {{
-            color: #667eea;
+            color: #744527;
             font-weight: bold;
             font-size: 0.9em;
         }}
@@ -503,7 +503,7 @@ class CoffeeBrewVisualizationAgent:
 
         .progress-fill {{
             height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #d9b28c 0%, #744527 100%);
             transition: width 0.3s ease;
         }}
 
