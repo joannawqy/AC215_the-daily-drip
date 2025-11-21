@@ -72,6 +72,37 @@ def extract_evaluation(meta: dict):
         out["jag"] = jag
     return out or None
 
+def compute_evaluation_score(evaluation):
+    """Compute normalized evaluation score (0-1) from liking and JAG metrics."""
+    if not evaluation:
+        return 0.0
+    score, weights_sum = 0.0, 0.0
+    
+    liking = evaluation.get("liking")
+    if liking is not None:
+        try:
+            score += (float(liking) / 10.0) * 0.6
+            weights_sum += 0.6
+        except (ValueError, TypeError):
+            pass
+    
+    jag = evaluation.get("jag", {})
+    if isinstance(jag, dict):
+        jag_keys = ["flavour_intensity", "acidity", "mouthfeel", "sweetness", "purchase_intent"]
+        jag_values = []
+        for key in jag_keys:
+            val = jag.get(key)
+            if val is not None:
+                try:
+                    jag_values.append((float(val) - 1.0) / 4.0)
+                except (ValueError, TypeError):
+                    pass
+        if jag_values:
+            score += (sum(jag_values) / len(jag_values)) * 0.4
+            weights_sum += 0.4
+    
+    return score / weights_sum if weights_sum > 0 else 0.0
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--persist-dir', required=True)
@@ -80,6 +111,13 @@ def main():
     ap.add_argument('--bean-inline', help="inline JSON string with a 'bean' object (or full record)")
     ap.add_argument('--k', type=int, default=5)
     ap.add_argument('--json', action='store_true', help="output JSON")
+    
+    # Reranking parameters
+    ap.add_argument('--use-reranking', action='store_true', default=True, help="enable evaluation-based reranking")
+    ap.add_argument('--no-reranking', dest='use_reranking', action='store_false', help="disable reranking")
+    ap.add_argument('--similarity-weight', type=float, default=0.7, help="weight for similarity (0-1), default 0.7")
+    ap.add_argument('--retrieval-multiplier', type=int, default=3, help="fetch k × multiplier results before reranking")
+    
     args = ap.parse_args()
 
     # Build query text from structured bean or free text
@@ -99,10 +137,13 @@ def main():
     ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
     coll = client.get_or_create_collection("coffee_chunks", embedding_function=ef)
 
+    # Fetch more results if reranking is enabled
+    n_fetch = args.k * args.retrieval_multiplier if args.use_reranking else args.k
+    
     res = coll.query(
-    query_texts=[q_text],
-    n_results=args.k,
-    include=["metadatas", "documents", "distances"] 
+        query_texts=[q_text],
+        n_results=n_fetch,
+        include=["metadatas", "documents", "distances"] 
     )
 
     docs = res["documents"][0]
@@ -110,15 +151,44 @@ def main():
     ids = res["ids"][0]
     dists = res["distances"][0]
 
+    # Build candidates with combined scores
+    candidates = []
+    for doc, meta, id_, dist in zip(docs, metas, ids, dists):
+        brewing = extract_brewing(meta)
+        evaluation = extract_evaluation(meta)
+        
+        # Compute combined score if reranking
+        combined_score = None
+        if args.use_reranking:
+            similarity_score = 1.0 / (1.0 + float(dist))
+            eval_score = compute_evaluation_score(evaluation)
+            evaluation_weight = 1.0 - args.similarity_weight
+            combined_score = (args.similarity_weight * similarity_score) + (evaluation_weight * eval_score)
+        
+        candidates.append({
+            "id": id_,
+            "distance": float(dist),
+            "bean_text": doc,
+            "brewing": brewing,
+            "evaluation": evaluation,
+            "combined_score": combined_score,
+        })
+    
+    # Rerank if enabled
+    if args.use_reranking:
+        candidates.sort(key=lambda x: x["combined_score"], reverse=True)
+    
+    # Take top-k with final ranks
     results = []
-    for rank, (doc, meta, id_, dist) in enumerate(zip(docs, metas, ids, dists), 1):
+    for rank, candidate in enumerate(candidates[:args.k], 1):
         result = {
             "rank": rank,
-            "id": id_,
-            "score": float(dist),
-            "bean_text": doc,                  # the bean-based text used for retrieval
-            "brewing": extract_brewing(meta),  # structured brewing block
-            "evaluation": extract_evaluation(meta),  # structured evaluation block
+            "id": candidate["id"],
+            "score": candidate["distance"],
+            "bean_text": candidate["bean_text"],
+            "brewing": candidate["brewing"],
+            "evaluation": candidate["evaluation"],
+            "combined_score": candidate["combined_score"],
         }
         results.append(result)
 
@@ -126,7 +196,10 @@ def main():
         print(json.dumps({"query": q_text, "results": results}, ensure_ascii=False, indent=2))
     else:
         for r in results:
-            print(f"[{r['rank']}] id={r['id']}  score={r['score']:.4f}")
+            score_info = f"distance={r['score']:.4f}"
+            if r.get('combined_score') is not None:
+                score_info += f"  combined_score={r['combined_score']:.4f}"
+            print(f"[{r['rank']}] id={r['id']}  {score_info}")
             print("bean_text:", r["bean_text"])
             print("brewing:", json.dumps(r["brewing"], ensure_ascii=False))
             print("evaluation:", json.dumps(r["evaluation"], ensure_ascii=False))
