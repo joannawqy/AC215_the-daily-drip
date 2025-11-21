@@ -207,7 +207,13 @@ def extract_evaluation(meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def _fetch_references_via_service(
-    bean_info: Dict[str, Any], *, rag_service_url: str, k: int
+    bean_info: Dict[str, Any],
+    *,
+    rag_service_url: str,
+    k: int,
+    use_evaluation_reranking: bool = True,
+    similarity_weight: float = 0.7,
+    retrieval_multiplier: int = 3,
 ) -> List[Dict[str, Any]]:
     if httpx is None:
         raise RuntimeError("httpx is not installed; cannot call the RAG service.")
@@ -215,7 +221,12 @@ def _fetch_references_via_service(
     if not rag_service_url:
         raise ValueError("RAG service URL must not be empty.")
 
-    payload: Dict[str, Any] = {"k": k}
+    payload: Dict[str, Any] = {
+        "k": k,
+        "use_evaluation_reranking": use_evaluation_reranking,
+        "similarity_weight": similarity_weight,
+        "retrieval_multiplier": retrieval_multiplier,
+    }
     if "bean" in bean_info:
         payload["record"] = bean_info
         if isinstance(bean_info.get("bean"), dict):
@@ -240,12 +251,59 @@ def _fetch_references_via_service(
             "bean_text": item.get("bean_text"),
             "brewing": item.get("brewing"),
             "evaluation": item.get("evaluation"),
+            "combined_score": item.get("combined_score"),
         }
         references.append(reference)
     return references
 
+def _compute_evaluation_score(evaluation: Optional[Dict[str, Any]]) -> float:
+    """Compute normalized evaluation score (0-1) from liking and JAG metrics."""
+    if not evaluation:
+        return 0.0
+    
+    score = 0.0
+    weights_sum = 0.0
+    
+    # Liking (0-10) → 60% weight
+    liking = evaluation.get("liking")
+    if liking is not None:
+        try:
+            normalized_liking = float(liking) / 10.0
+            score += normalized_liking * 0.6
+            weights_sum += 0.6
+        except (ValueError, TypeError):
+            pass
+    
+    # JAG metrics (1-5) → 40% weight
+    jag = evaluation.get("jag", {})
+    if isinstance(jag, dict):
+        jag_keys = ["flavour_intensity", "acidity", "mouthfeel", "sweetness", "purchase_intent"]
+        jag_values = []
+        for key in jag_keys:
+            val = jag.get(key)
+            if val is not None:
+                try:
+                    normalized_val = (float(val) - 1.0) / 4.0
+                    jag_values.append(normalized_val)
+                except (ValueError, TypeError):
+                    pass
+        
+        if jag_values:
+            jag_avg = sum(jag_values) / len(jag_values)
+            score += jag_avg * 0.4
+            weights_sum += 0.4
+    
+    return score / weights_sum if weights_sum > 0 else 0.0
+
+
 def _fetch_references_via_local_index(
-    bean_info: Dict[str, Any], *, persist_dir: Path, k: int
+    bean_info: Dict[str, Any],
+    *,
+    persist_dir: Path,
+    k: int,
+    use_evaluation_reranking: bool = True,
+    similarity_weight: float = 0.7,
+    retrieval_multiplier: int = 3,
 ) -> List[Dict[str, Any]]:
     if chromadb is None or embedding_functions is None:
         raise RuntimeError("chromadb is not installed; cannot query the local index.")
@@ -267,9 +325,13 @@ def _fetch_references_via_local_index(
 
     query_source = bean_info if "bean" in bean_info else {"bean": bean_info}
     query_text = bean_text_from_obj(query_source)
+    
+    # Fetch more results if reranking is enabled
+    n_fetch = k * retrieval_multiplier if use_evaluation_reranking else k
+    
     response = collection.query(
         query_texts=[query_text],
-        n_results=k,
+        n_results=n_fetch,
         include=["metadatas", "documents", "distances"],
     )
 
@@ -278,19 +340,44 @@ def _fetch_references_via_local_index(
     ids = response.get("ids", [[]])[0]
     distances = response.get("distances", [[]])[0]
 
-    references: List[Dict[str, Any]] = []
-    for rank, (doc, meta, record_id, dist) in enumerate(
-        zip(docs, metas, ids, distances), start=1
-    ):
+    # Build candidates with combined scores
+    candidates = []
+    for doc, meta, record_id, dist in zip(docs, metas, ids, distances):
         brewing = extract_brewing(meta)
         evaluation = extract_evaluation(meta)
-        reference = {
-            "rank": rank,
+        
+        # Compute combined score if reranking
+        combined_score = None
+        if use_evaluation_reranking:
+            similarity_score = 1.0 / (1.0 + float(dist))
+            eval_score = _compute_evaluation_score(evaluation)
+            evaluation_weight = 1.0 - similarity_weight
+            combined_score = (similarity_weight * similarity_score) + (evaluation_weight * eval_score)
+        
+        candidates.append({
             "id": record_id,
             "distance": float(dist),
             "bean_text": doc,
             "brewing": brewing,
             "evaluation": evaluation,
+            "combined_score": combined_score,
+        })
+    
+    # Rerank if enabled
+    if use_evaluation_reranking:
+        candidates.sort(key=lambda x: x["combined_score"], reverse=True)
+    
+    # Return top-k with final ranks
+    references: List[Dict[str, Any]] = []
+    for rank, candidate in enumerate(candidates[:k], start=1):
+        reference = {
+            "rank": rank,
+            "id": candidate["id"],
+            "distance": candidate["distance"],
+            "bean_text": candidate["bean_text"],
+            "brewing": candidate["brewing"],
+            "evaluation": candidate["evaluation"],
+            "combined_score": candidate["combined_score"],
         }
         references.append(reference)
 
@@ -303,19 +390,43 @@ def query_reference_recipes(
     persist_dir: Path = DEFAULT_RAG_PERSIST_DIR,
     rag_service_url: Optional[str] = DEFAULT_RAG_SERVICE_URL,
     k: int = 3,
+    use_evaluation_reranking: bool = True,
+    similarity_weight: float = 0.7,
+    retrieval_multiplier: int = 3,
 ) -> List[Dict[str, Any]]:
     """
     Retrieve up to ``k`` similar beans from either the remote RAG service or the local index.
+    
+    Args:
+        bean_info: Bean data to query for similar beans
+        persist_dir: Local ChromaDB directory (used if rag_service_url is None)
+        rag_service_url: RAG service URL (if None, uses local index)
+        k: Number of results to return
+        use_evaluation_reranking: Whether to rerank by evaluation scores (default: True)
+        similarity_weight: Weight for similarity (0-1), evaluation_weight = 1 - similarity_weight (default: 0.7)
+        retrieval_multiplier: Fetch k × multiplier results before reranking (default: 3)
     """
     if k <= 0:
         return []
 
     if rag_service_url:
         return _fetch_references_via_service(
-            bean_info, rag_service_url=rag_service_url, k=k
+            bean_info,
+            rag_service_url=rag_service_url,
+            k=k,
+            use_evaluation_reranking=use_evaluation_reranking,
+            similarity_weight=similarity_weight,
+            retrieval_multiplier=retrieval_multiplier,
         )
 
-    return _fetch_references_via_local_index(bean_info, persist_dir=persist_dir, k=k)
+    return _fetch_references_via_local_index(
+        bean_info,
+        persist_dir=persist_dir,
+        k=k,
+        use_evaluation_reranking=use_evaluation_reranking,
+        similarity_weight=similarity_weight,
+        retrieval_multiplier=retrieval_multiplier,
+    )
 
 
 @lru_cache(maxsize=1)
