@@ -1,5 +1,7 @@
 # AC215 – Milestone 2 – DailyDrip
 
+[![codecov](https://codecov.io/gh/joannawqy/AC215_the-daily-drip/branch/milestone4/graph/badge.svg)](https://codecov.io/gh/joannawqy/AC215_the-daily-drip)
+
 ## Team
 - **Team Name:** DailyDrip Collective  
 - **Members:** Even Li, Joanna Wang, Jessica Wang, Zicheng Ma
