@@ -1099,6 +1099,7 @@ npm install
 
 ## Additional Resources
 
+- **Application Design**: See [APPLICATION_DESIGN.md](APPLICATION_DESIGN.md) for comprehensive architecture documentation
 - **Integration Guide**: See [INTEGRATION_USAGE.md](INTEGRATION_USAGE.md) for detailed agent usage
 - **RAG Documentation**: See [dailydrip_rag/README.md](dailydrip_rag/README.md) for pipeline details
 - **CI Setup**: See [CI-tests/CI_SETUP_SUMMARY.md](CI-tests/CI_SETUP_SUMMARY.md) for CI/CD configuration
