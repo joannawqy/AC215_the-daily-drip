@@ -75,14 +75,18 @@ The repository is organized into three main modules with clear separation of con
 AC215_the-daily-drip/
 ├── README.md                           # This file - setup & usage guide
 ├── INTEGRATION_USAGE.md                # Detailed agent integration guide
-├── CI_SETUP_SUMMARY.md                 # CI/CD pipeline documentation
-├── QUICK_START_CI.md                   # Quick CI setup guide
 ├── LICENSE                             # MIT License
 ├── Makefile                            # Docker workflow commands
 ├── docker-compose.yml                  # Container orchestration
 ├── Dockerfile.agent                    # Agent API container image
-├── .flake8                             # Python linting configuration
 ├── .gitignore                          # Git ignore rules
+│
+├── CI-tests/                           # CI/CD Testing Configuration
+│   ├── .flake8                         # Python linting configuration
+│   ├── CI_SETUP_SUMMARY.md             # CI/CD pipeline documentation
+│   ├── QUICK_START_CI.md               # Quick CI setup guide
+│   ├── setup-tests.sh                  # Test environment setup script
+│   └── run-all-tests.sh                # Script to run all tests
 │
 ├── agent_core/                         # Backend API & Agent Logic
 │   ├── __init__.py                     # Package initialization
@@ -1097,7 +1101,8 @@ npm install
 
 - **Integration Guide**: See [INTEGRATION_USAGE.md](INTEGRATION_USAGE.md) for detailed agent usage
 - **RAG Documentation**: See [dailydrip_rag/README.md](dailydrip_rag/README.md) for pipeline details
-- **CI Setup**: See [CI_SETUP_SUMMARY.md](CI_SETUP_SUMMARY.md) for CI/CD configuration
+- **CI Setup**: See [CI-tests/CI_SETUP_SUMMARY.md](CI-tests/CI_SETUP_SUMMARY.md) for CI/CD configuration
+- **Quick Start CI**: See [CI-tests/QUICK_START_CI.md](CI-tests/QUICK_START_CI.md) for CI quick start guide
 - **Project Report**: See [reports/MS2 Report.pdf](reports/MS2%20Report.pdf) for milestone 2 deliverables
 
 ## Future Enhancements
