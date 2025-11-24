@@ -720,6 +720,39 @@ class VisualizationResponse(BaseModel):
     summary: Dict[str, Any]
 
 
+class BeanPayload(BaseModel):
+    name: str = Field(..., min_length=1, description="Bean name.")
+    origin: Optional[str] = Field(default=None, description="Origin or region.")
+    process: Optional[str] = Field(default=None, description="Processing method.")
+    variety: Optional[str] = Field(default=None, description="Variety or cultivar.")
+    roasted_on: Optional[str] = Field(
+        default=None,
+        description="Roast date in ISO format (YYYY-MM-DD).",
+    )
+    roast_level: Optional[int] = Field(
+        default=None,
+        description="Roast level indicator, typically 0-5.",
+    )
+    roasted_days: Optional[int] = Field(
+        default=None,
+        description="Days since roast.",
+    )
+    altitude: Optional[int] = Field(
+        default=None,
+        description="Growing altitude in masl.",
+    )
+    flavor_notes: List[str] = Field(
+        default_factory=list,
+        description="Collection of flavor notes.",
+    )
+
+
+class BeanRecord(BeanPayload):
+    bean_id: str
+    created_at: str
+    updated_at: str
+
+
 class UserPreferences(BaseModel):
     flavor_notes: List[str] = Field(
         default_factory=list,
@@ -761,39 +794,6 @@ class LoginRequest(BaseModel):
 class PreferencesUpdateRequest(BaseModel):
     flavor_notes: List[str] = Field(default_factory=list)
     roast_level: Optional[str] = None
-
-
-class BeanPayload(BaseModel):
-    name: str = Field(..., min_length=1, description="Bean name.")
-    origin: Optional[str] = Field(default=None, description="Origin or region.")
-    process: Optional[str] = Field(default=None, description="Processing method.")
-    variety: Optional[str] = Field(default=None, description="Variety or cultivar.")
-    roasted_on: Optional[str] = Field(
-        default=None,
-        description="Roast date in ISO format (YYYY-MM-DD).",
-    )
-    roast_level: Optional[int] = Field(
-        default=None,
-        description="Roast level indicator, typically 0-5.",
-    )
-    roasted_days: Optional[int] = Field(
-        default=None,
-        description="Days since roast.",
-    )
-    altitude: Optional[int] = Field(
-        default=None,
-        description="Growing altitude in masl.",
-    )
-    flavor_notes: List[str] = Field(
-        default_factory=list,
-        description="Collection of flavor notes.",
-    )
-
-
-class BeanRecord(BeanPayload):
-    bean_id: str
-    created_at: str
-    updated_at: str
 
 
 class BeanCreateRequest(BaseModel):
