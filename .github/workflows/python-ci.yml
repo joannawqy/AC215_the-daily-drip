@@ -47,6 +47,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: ./dailydrip_rag/coverage.xml
         flags: dailydrip-rag
         name: dailydrip-rag-coverage
@@ -93,6 +94,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: ./agent_core/coverage.xml
         flags: agent-core
         name: agent-core-coverage
