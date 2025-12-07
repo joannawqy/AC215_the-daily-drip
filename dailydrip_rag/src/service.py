@@ -254,6 +254,22 @@ def create_app() -> FastAPI:
         )
         return RagResponse(query=query_text, results=results)
 
+    class FeedbackPayload(BaseModel):
+        id: str
+        text: str
+        meta: Dict[str, Any]
+
+    @app.post("/feedback", status_code=201)
+    def feedback(payload: FeedbackPayload) -> Dict[str, str]:
+        persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
+        collection = _get_collection(persist_dir)
+        collection.upsert(
+            ids=[payload.id],
+            documents=[payload.text],
+            metadatas=[payload.meta]
+        )
+        return {"status": "ok", "id": payload.id}
+
     return app
 
 

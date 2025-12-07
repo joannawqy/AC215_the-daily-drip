@@ -782,8 +782,8 @@ class AuthResponse(BaseModel):
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
-    display_name: Optional[str]
-    preferences: Optional[UserPreferences]
+    display_name: Optional[str] = None
+    preferences: Optional[UserPreferences] = None
 
 
 class LoginRequest(BaseModel):
@@ -806,6 +806,37 @@ class BeanUpdateRequest(BaseModel):
 
 class BeansResponse(BaseModel):
     beans: List[BeanRecord]
+
+
+class FeedbackRequest(BaseModel):
+    bean: Dict[str, Any]
+    recipe: Dict[str, Any]
+    evaluation: Dict[str, Any]
+    rag_persist_dir: Optional[str] = Field(
+        default=None,
+        description="Path to the local Chroma index.",
+    )
+
+
+def _pours_to_str(pours: Any) -> Optional[str]:
+    if isinstance(pours, list) and pours and isinstance(pours[0], dict):
+        return "; ".join(f"{p.get('start')}-{p.get('end')}:{p.get('water_added')}" for p in pours)
+    return None
+
+
+def _get_local_collection(persist_dir: Path):
+    if chromadb is None or embedding_functions is None:
+        raise RuntimeError("chromadb is not installed")
+    
+    persist_dir.mkdir(parents=True, exist_ok=True)
+
+    client = chromadb.PersistentClient(path=str(persist_dir))
+    embedding = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=RAG_MODEL
+    )
+    return client.get_or_create_collection(
+        RAG_COLLECTION, embedding_function=embedding
+    )
 
 
 def brew_with_options(
@@ -1100,6 +1131,78 @@ async def visualize_endpoint(payload: VisualizationRequest) -> VisualizationResp
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _sanitize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
+    out = {}
+    def put(k, v):
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+        elif isinstance(v, list):
+            if v and all(isinstance(x, dict) for x in v):
+                for idx, d in enumerate(v):
+                    for kk, vv in d.items():
+                        put(f"{k}.{idx}.{kk}", vv)
+            else:
+                out[k] = ", ".join(map(str, v))
+        elif isinstance(v, dict):
+            for kk, vv in v.items():
+                put(f"{k}.{kk}", vv)
+        else:
+            out[k] = str(v)
+            
+    for k, v in meta.items():
+        put(k, v)
+    return out
+
+
+@app.post("/feedback", status_code=status.HTTP_201_CREATED)
+async def submit_feedback(payload: FeedbackRequest) -> Dict[str, str]:
+    try:
+        bean_data = payload.bean
+        recipe = payload.recipe
+        brewing = recipe.get("brewing", recipe)
+        evaluation = payload.evaluation
+        
+        combined = {
+            "bean": bean_data,
+            "brewing": brewing,
+            "evaluation": evaluation
+        }
+        
+        flat = flatten_dict(combined)
+        
+        pours = brewing.get("pours")
+        if pours:
+            flat["brewing.pours_str"] = _pours_to_str(pours)
+            
+        text = bean_text_from_obj(flat)
+        
+        rid_base = str(flat.get("id") or flat.get("uuid") or flat.get("bean.name") or "")
+        rid = (rid_base if rid_base else "feedback") + "-" + str(abs(hash(text)))[-6:]
+        
+        sanitized_meta = _sanitize_meta(flat)
+        
+        rag_service_url = os.getenv("RAG_SERVICE_URL") or DEFAULT_RAG_SERVICE_URL
+        if not rag_service_url:
+             raise RuntimeError("RAG_SERVICE_URL is not configured")
+
+        async with httpx.AsyncClient(base_url=rag_service_url, timeout=30.0) as client:
+            response = await client.post("/feedback", json={
+                "id": rid,
+                "text": text,
+                "meta": sanitized_meta
+            })
+            if response.status_code != 201:
+                detail = response.text
+                raise RuntimeError(f"RAG service returned an error ({response.status_code}): {detail}")
+        
+        return {"status": "ok", "id": rid}
+        
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 

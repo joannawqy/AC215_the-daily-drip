@@ -83,3 +83,7 @@ export function brewRecipe(payload) {
 export function visualizeRecipe(recipe, formats = ['html']) {
   return request('/visualize', { method: 'POST', body: { recipe, formats } });
 }
+
+export function submitFeedback(payload) {
+  return request('/feedback', { method: 'POST', body: payload });
+}

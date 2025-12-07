@@ -13,7 +13,7 @@ import {
   Database,
   Pencil,
 } from 'lucide-react';
-import { brewRecipe, visualizeRecipe } from '../services/agentClient';
+import { brewRecipe, visualizeRecipe, submitFeedback } from '../services/agentClient';
 
 const brewerOptions = ['V60', 'April', 'Orea', 'Origami'];
 
@@ -172,6 +172,90 @@ function BeanSummary({ bean }) {
   );
 }
 
+
+function FeedbackForm({ onSubmit, isSubmitting }) {
+  const [liking, setLiking] = useState(8);
+  const [jag, setJag] = useState({
+    flavour_intensity: 3,
+    acidity: 3,
+    mouthfeel: 3,
+    sweetness: 3,
+    purchase_intent: 3,
+  });
+
+  const handleJagChange = (key, val) => {
+    setJag((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit({
+      liking,
+      jag,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md p-6 border border-coffee-100 space-y-4">
+      <h4 className="font-bold text-coffee-900 flex items-center gap-2">
+        <Sparkles size={18} className="text-coffee-700" />
+        Rate this Brew
+      </h4>
+
+      <div>
+        <label className="block text-sm font-semibold text-coffee-700 mb-1">
+          Overall Liking (0-10)
+        </label>
+        <div className="flex items-center gap-4">
+          <input
+            type="range"
+            min="0"
+            max="10"
+            value={liking}
+            onChange={(e) => setLiking(Number(e.target.value))}
+            className="w-full h-2 bg-coffee-200 rounded-lg appearance-none cursor-pointer accent-coffee-700"
+          />
+          <span className="text-lg font-bold text-coffee-900 w-8 text-center">{liking}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.keys(jag).map((key) => (
+          <div key={key}>
+            <label className="block text-sm font-semibold text-coffee-700 mb-1 capitalize">
+              {key.replace('_', ' ')} (1-5)
+            </label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => handleJagChange(key, val)}
+                  className={`w-8 h-8 rounded-full text-sm font-bold transition-colors ${jag[key] === val
+                    ? 'bg-coffee-700 text-white'
+                    : 'bg-coffee-50 text-coffee-700 hover:bg-coffee-100'
+                    }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className={`w-full py-3 rounded-lg font-semibold text-white transition-colors ${isSubmitting ? 'bg-coffee-400 cursor-not-allowed' : 'bg-coffee-700 hover:bg-coffee-800'
+          }`}
+      >
+        {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+      </button>
+    </form>
+  );
+}
+
 const RecipeGenerator = ({ beans, onRefreshBeans }) => {
   const [mode, setMode] = useState(beans.length > 0 ? 'library' : 'manual');
   const [selectedBeanId, setSelectedBeanId] = useState(beans[0]?.bean_id || '');
@@ -183,6 +267,8 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     if (mode === 'library' && beans.length === 0) {
@@ -252,6 +338,7 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
   const handleGenerate = async (event) => {
     event.preventDefault();
     setError(null);
+    setFeedbackSubmitted(false);
 
     const bean = beanPayload();
     if (!bean) {
@@ -300,6 +387,23 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
     }
   };
 
+  const handleFeedbackSubmit = async (evaluation) => {
+    if (!session) return;
+    setIsSubmittingFeedback(true);
+    try {
+      await submitFeedback({
+        bean: session.bean,
+        recipe: session.recipe,
+        evaluation,
+      });
+      setFeedbackSubmitted(true);
+    } catch (err) {
+      setError(err.message || 'Failed to submit feedback');
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
   const pours = session?.recipe?.brewing?.pours || [];
   const summary = session?.visualization?.summary;
   const htmlVisualization = session?.visualization?.outputs?.html;
@@ -323,9 +427,8 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
               type="button"
               onClick={() => setMode('library')}
               disabled={beans.length === 0}
-              className={`px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 ${
-                mode === 'library' ? 'bg-coffee-700 text-white' : 'text-coffee-700'
-              } ${beans.length === 0 ? 'cursor-not-allowed opacity-50' : ''}`}
+              className={`px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 ${mode === 'library' ? 'bg-coffee-700 text-white' : 'text-coffee-700'
+                } ${beans.length === 0 ? 'cursor-not-allowed opacity-50' : ''}`}
             >
               <Database size={16} />
               Saved bean
@@ -333,9 +436,8 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
             <button
               type="button"
               onClick={() => setMode('manual')}
-              className={`px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 ${
-                mode === 'manual' ? 'bg-coffee-700 text-white' : 'text-coffee-700'
-              }`}
+              className={`px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 ${mode === 'manual' ? 'bg-coffee-700 text-white' : 'text-coffee-700'
+                }`}
             >
               <Pencil size={16} />
               Manual entry
@@ -527,9 +629,8 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
           <button
             type="submit"
             disabled={isGenerating}
-            className={`w-full py-3 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2 ${
-              isGenerating ? 'bg-coffee-400 cursor-not-allowed' : 'bg-coffee-700 hover:bg-coffee-800'
-            }`}
+            className={`w-full py-3 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2 ${isGenerating ? 'bg-coffee-400 cursor-not-allowed' : 'bg-coffee-700 hover:bg-coffee-800'
+              }`}
           >
             {isGenerating ? (
               <>
@@ -667,6 +768,15 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
                 ASCII flow
               </h4>
               <pre className="text-xs overflow-x-auto whitespace-pre-wrap">{asciiVisualization}</pre>
+            </div>
+          )}
+
+          {!feedbackSubmitted ? (
+            <FeedbackForm onSubmit={handleFeedbackSubmit} isSubmitting={isSubmittingFeedback} />
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-green-800">
+              <CheckCircle2 size={20} />
+              <p className="font-medium">Feedback submitted! This brew has been added to the RAG database.</p>
             </div>
           )}
         </section>
