@@ -3,53 +3,20 @@ version: "3.9"
 x-shared-volumes: &shared-volumes
   - ./dailydrip_rag/data:/app/data
   - ./dailydrip_rag/indexes:/app/indexes
+  - ./dailydrip_rag:/app/dailydrip_rag
+  - ./agent_core:/app/agent_core
 
 services:
-  rag:
-    build:
-      context: ./dailydrip_rag
-      dockerfile: Dockerfile
-    command:
-      - uv
-      - run
-      - python
-      - -m
-      - src.service
-    working_dir: /app
-    environment:
-      RAG_PERSIST_DIR: /app/indexes/chroma
-    ports:
-      - "8000:8000"
-    volumes: *shared-volumes
-
-  agent:
+  app:
     build:
       context: .
-      dockerfile: Dockerfile.agent
-    command:
-      - uvicorn
-      - agent_core.agent:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "9000"
-    working_dir: /app
-    depends_on:
-      rag:
-        condition: service_started
+      dockerfile: Dockerfile.monolith
+    ports:
+      - "80:80" # Frontend
+      - "8000:8000" # RAG (Debug)
+      - "9000:9000" # Agent (Debug)
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      RAG_SERVICE_URL: http://rag:8000
-    ports:
-      - "9000:9000"
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:80"
-    depends_on:
-      - agent
-    environment:
-      REACT_APP_AGENT_API_URL: http://localhost:9000
+      # RAG_PERSIST_DIR and RAG_SERVICE_URL are set in supervisord.conf or Dockerfile
+      # but we can override here if needed.
+    volumes: *shared-volumes

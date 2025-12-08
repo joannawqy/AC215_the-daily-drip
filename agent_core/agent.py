@@ -591,6 +591,25 @@ def _get_openai_client() -> OpenAI:
     return OpenAI(api_key=api_key)
 
 
+class Pour(BaseModel):
+    start: int = Field(..., description="Start time in seconds")
+    end: int = Field(..., description="End time in seconds")
+    water_added: int = Field(..., description="Amount of water added in this step in grams")
+
+
+class Brewing(BaseModel):
+    brewer: str = Field(..., description="Name of the brewer (e.g., V60, April)")
+    temperature: int = Field(..., description="Water temperature in Celsius")
+    grinding_size: int = Field(..., description="Grind size (clicks)")
+    dose: int = Field(..., description="Coffee dose in grams")
+    target_water: int = Field(..., description="Total target water in grams")
+    pours: List[Pour] = Field(..., description="List of pour steps")
+
+
+class Recipe(BaseModel):
+    brewing: Brewing = Field(..., description="Brewing details")
+
+
 def generate_recipe(
     bean_info: Dict[str, Any],
     brewer: str,
@@ -995,7 +1014,20 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         }
         _user_store[user_id] = user_record
         _email_index[email_key] = user_id
+        _email_index[email_key] = user_id
         _persist_user_store()
+
+    # Initialize RAG collection for the new user
+    rag_url = os.getenv("RAG_SERVICE_URL") or DEFAULT_RAG_SERVICE_URL
+    if httpx and rag_url:
+        try:
+            # Fire-and-forget-ish: fail silently or log warning to not block registration
+            # Use a short timeout
+            with httpx.Client(base_url=rag_url, timeout=5.0) as client:
+                client.post("/init_user", json={"user_id": user_id})
+        except Exception as e:
+            # Log but don't fail registration
+            print(f"Warning: Failed to initialize RAG collection for {user_id}: {e}")
     token = _issue_token(user_id)
     return AuthResponse(token=token, user=UserSummary(**_user_to_public_payload(user_record)))
 

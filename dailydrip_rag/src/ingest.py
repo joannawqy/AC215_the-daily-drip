@@ -117,6 +117,28 @@ def main():
 
     print(f"Wrote records to {out}")
 
+def sanitize_meta(meta: dict) -> dict:
+    out = {}
+    def put(k, v):
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+        elif isinstance(v, list):
+            if v and all(isinstance(x, dict) for x in v):
+                # list of dicts -> flatten with indices
+                for idx, d in enumerate(v):
+                    for kk, vv in d.items():
+                        put(f"{k}.{idx}.{kk}", vv)
+            else:
+                out[k] = ", ".join(map(str, v))
+        elif isinstance(v, dict):
+            for kk, vv in v.items():
+                put(f"{k}.{kk}", vv)
+        else:
+            out[k] = str(v)
+    for k, v in meta.items():
+        put(k, v)
+    return out
+
 def ingest_records(records: list, collection) -> None:
     """
     Ingest a list of records (dicts) into a ChromaDB collection.
@@ -131,15 +153,8 @@ def ingest_records(records: list, collection) -> None:
         ids.append(processed["id"])
         documents.append(processed["text"])
         
-        # Sanitize metadata for ChromaDB (no nested dicts/lists allowed in values usually, 
-        # but we'll use a simple sanitizer or rely on the caller/make_record to be clean enough.
-        # make_record returns 'meta' which is already flattened by flatten().
-        # However, flatten() might still leave some types Chroma doesn't like if not careful.
-        # For safety, we can convert non-primitives to strings if needed, 
-        # but 'flatten' in this file produces primitives mostly.
-        # Let's assume flatten() does its job for now or use the one from index.py if we could import it.
-        # For now, we use the flat dict directly.
-        metadatas.append(processed["meta"])
+        # Sanitize metadata for ChromaDB
+        metadatas.append(sanitize_meta(processed["meta"]))
         
     if ids:
         collection.upsert(

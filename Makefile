@@ -13,7 +13,7 @@ run:
 
 start:
 	@status=0; \
-	$(DOCKER_COMPOSE) up rag agent frontend || status=$$?; \
+	$(DOCKER_COMPOSE) up --build app || status=$$?; \
 	if [ $$status -eq 130 ]; then \
 		echo "docker compose interrupted by user"; \
 		exit 0; \
@@ -21,13 +21,7 @@ start:
 	exit $$status
 
 rag:
-	@status=0; \
-	$(DOCKER_COMPOSE) up --build rag || status=$$?; \
-	if [ $$status -eq 130 ]; then \
-		echo "docker compose interrupted by user"; \
-		exit 0; \
-	fi; \
-	exit $$status
+	@echo "RAG is now part of the monolithic app. Run 'make start' to start everything."
 
 down:
 	$(DOCKER_COMPOSE) down
@@ -35,8 +29,8 @@ down:
 clean:
 	rm -rf dailydrip_rag/data/processed/* dailydrip_rag/indexes/chroma/*
 
-# Build all runtime images (rag, agent, and frontend)
+# Build monolith image
 build-runtime:
-	@echo "Building runtime images..."
-	$(DOCKER_COMPOSE) build rag agent frontend
+	@echo "Building monolithic image..."
+	$(DOCKER_COMPOSE) build app
 

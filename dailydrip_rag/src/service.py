@@ -89,9 +89,8 @@ def _ensure_user_collection(client, user_id: str):
     collection_name = f"rag_{user_id}"
     try:
         # Check if collection exists by trying to get it
-        # Note: Chroma's get_collection raises ValueError if not found
         client.get_collection(collection_name)
-    except ValueError:
+    except Exception:  # Catching broad exception as Chroma can raise ValueError or NotFoundError
         # Collection doesn't exist, create and populate it
         print(f"Initializing collection for user {user_id}...")
         collection = _get_collection(client, collection_name)
@@ -300,6 +299,16 @@ def create_app() -> FastAPI:
             metadatas=[payload.meta]
         )
         return {"status": "ok", "id": payload.id}
+
+    class InitUserPayload(BaseModel):
+        user_id: str
+
+    @app.post("/init_user", status_code=201)
+    def init_user(payload: InitUserPayload) -> Dict[str, str]:
+        persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
+        client = _get_client(persist_dir)
+        _ensure_user_collection(client, payload.user_id)
+        return {"status": "ok", "user_id": payload.user_id}
 
     return app
 
