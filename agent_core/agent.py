@@ -532,24 +532,26 @@ def _fetch_references_via_local_index(
     return references
 
 
-def query_reference_recipes(
+def fetch_references(
     bean_info: Dict[str, Any],
     *,
-    persist_dir: Path = DEFAULT_RAG_PERSIST_DIR,
-    rag_service_url: Optional[str] = DEFAULT_RAG_SERVICE_URL,
+    persist_dir: Optional[Path] = None,
+    rag_service_url: Optional[str] = None,
     k: int = 3,
+    user_id: Optional[str] = None,
     use_evaluation_reranking: bool = True,
     similarity_weight: float = 0.7,
     retrieval_multiplier: int = 3,
 ) -> List[Dict[str, Any]]:
     """
-    Retrieve up to ``k`` similar beans from either the remote RAG service or the local index.
+    Retrieve similar past brews using either a local ChromaDB index or a remote RAG service.
     
     Args:
-        bean_info: Bean data to query for similar beans
+        bean_info: Dictionary containing bean details
         persist_dir: Local ChromaDB directory (used if rag_service_url is None)
         rag_service_url: RAG service URL (if None, uses local index)
         k: Number of results to return
+        user_id: User ID for multi-tenant RAG
         use_evaluation_reranking: Whether to rerank by evaluation scores (default: True)
         similarity_weight: Weight for similarity (0-1), evaluation_weight = 1 - similarity_weight (default: 0.7)
         retrieval_multiplier: Fetch k × multiplier results before reranking (default: 3)
@@ -558,10 +560,14 @@ def query_reference_recipes(
         return []
 
     if rag_service_url:
+        if not user_id:
+             print("Warning: user_id not provided for RAG service call")
+             return []
         return _fetch_references_via_service(
             bean_info,
             rag_service_url=rag_service_url,
             k=k,
+            user_id=user_id,
             use_evaluation_reranking=use_evaluation_reranking,
             similarity_weight=similarity_weight,
             retrieval_multiplier=retrieval_multiplier,
@@ -569,7 +575,7 @@ def query_reference_recipes(
 
     return _fetch_references_via_local_index(
         bean_info,
-        persist_dir=persist_dir,
+        persist_dir=persist_dir or DEFAULT_RAG_PERSIST_DIR,
         k=k,
         use_evaluation_reranking=use_evaluation_reranking,
         similarity_weight=similarity_weight,
@@ -591,8 +597,8 @@ def generate_recipe(
     *,
     reference_recipes: Optional[List[Dict[str, Any]]] = None,
     custom_note: Optional[str] = None,
-    model: str = "gpt-4.1-mini",
-    temperature: float = 0.6,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.7,
     top_p: float = 0.9,
 ) -> Dict[str, Any]:
     """
@@ -600,32 +606,48 @@ def generate_recipe(
     Optionally provide RAG reference recipes and a user custom note to steer the output.
     """
     client = _get_openai_client()
-    payload: Dict[str, Any] = {
-        "bean": bean_info,
-        "brewer": brewer,
-        "reference_recipes": reference_recipes or [],
-    }
+    
+    system_prompt = (
+        "You are an expert barista specializing in pour-over coffee. "
+        "Your goal is to create a precise brewing recipe based on the bean's characteristics "
+        "and any provided context."
+    )
+    
+    user_content = f"Bean: {json.dumps(bean_info)}\nBrewer: {brewer}"
+    
     if custom_note:
-        payload["custom_note"] = custom_note
+        user_content += f"\nUser Note: {custom_note}"
+        
+    if reference_recipes:
+        refs_str = "\n".join([
+            f"- {r.get('bean_text', '')} | Recipe: {json.dumps(r.get('brewing', {}))}"
+            for r in reference_recipes
+        ])
+        user_content += f"\n\nSimilar Past Brews:\n{refs_str}\n\nUse these past brews as inspiration but adapt to the current bean."
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": json.dumps(payload, ensure_ascii=False),
-        },
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content}
     ]
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        top_p=top_p,
-    )
-    content = response.choices[0].message.content or ""
-    content = clean_json_payload(content)
-    recipe = json.loads(content)
-    return recipe
+    
+    try:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            top_p=top_p,
+            functions=[{
+                "name": "generate_recipe",
+                "description": "Generate a coffee brewing recipe",
+                "parameters": Recipe.model_json_schema()
+            }],
+            function_call={"name": "generate_recipe"}
+        )
+        
+        func_args = json.loads(completion.choices[0].message.function_call.arguments)
+        return func_args
+    except Exception as e:
+        raise RuntimeError(f"OpenAI API error: {e}")
 
 
 def normalize_recipe(recipe: Dict[str, Any]) -> Dict[str, Any]:
@@ -840,37 +862,45 @@ def _get_local_collection(persist_dir: Path):
 
 
 def brew_with_options(
-    bean_info: Dict[str, Any],
+    bean: Dict[str, Any],
     brewer: str,
     *,
-    note: Optional[str],
-    rag_enabled: bool,
-    rag_service_url: Optional[str],
-    rag_persist_dir: Optional[str],
-    rag_k: int,
-    model: str,
-    temperature: float,
-    top_p: float,
+    note: Optional[str] = None,
+    rag_enabled: bool = True,
+    rag_service_url: Optional[str] = None,
+    rag_persist_dir: Optional[str] = None,
+    rag_k: int = 3,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.7,
+    top_p: float = 0.9,
+    user_id: Optional[str] = None,
 ) -> BrewResponse:
-    bean_info = _normalize_roast_fields(dict(bean_info))
-    flavors = bean_info.get("flavor_notes")
+    """
+    Orchestrates the brewing process:
+    1. Retrieve similar recipes (if RAG enabled)
+    2. Generate new recipe using LLM
+    """
+    bean = _normalize_roast_fields(dict(bean))
+    flavors = bean.get("flavor_notes")
     if isinstance(flavors, str):
-        bean_info["flavor_notes"] = _clean_flavor_notes([note.strip() for note in flavors.split(",")])
+        bean["flavor_notes"] = _clean_flavor_notes([note.strip() for note in flavors.split(",")])
     elif not isinstance(flavors, list):
-        bean_info["flavor_notes"] = []
+        bean["flavor_notes"] = []
     else:
-        bean_info["flavor_notes"] = _clean_flavor_notes(flavors)
+        bean["flavor_notes"] = _clean_flavor_notes(flavors)
     references: List[Dict[str, Any]] = []
     if rag_enabled:
-        references = query_reference_recipes(
-            bean_info,
-            persist_dir=Path(rag_persist_dir or DEFAULT_RAG_PERSIST_DIR),
-            rag_service_url=rag_service_url or DEFAULT_RAG_SERVICE_URL,
+        persist_path = Path(rag_persist_dir) if rag_persist_dir else None
+        references = fetch_references(
+            bean,
+            persist_dir=persist_path,
+            rag_service_url=rag_service_url,
             k=rag_k,
+            user_id=user_id,
         )
 
     recipe = generate_recipe(
-        bean_info,
+        bean,
         brewer,
         reference_recipes=references,
         custom_note=note,
@@ -1097,7 +1127,10 @@ def delete_bean(
 
 
 @app.post("/brew", response_model=BrewResponse)
-async def brew_endpoint(payload: BrewRequest) -> BrewResponse:
+async def brew_endpoint(
+    payload: BrewRequest,
+    current_user: Dict[str, Any] = Depends(get_authenticated_user),
+) -> BrewResponse:
     try:
         return await run_in_threadpool(
             brew_with_options,
@@ -1111,6 +1144,7 @@ async def brew_endpoint(payload: BrewRequest) -> BrewResponse:
             model=payload.model,
             temperature=payload.temperature,
             top_p=payload.top_p,
+            user_id=current_user["user_id"],
         )
     except EnvironmentError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -1158,7 +1192,10 @@ def _sanitize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.post("/feedback", status_code=status.HTTP_201_CREATED)
-async def submit_feedback(payload: FeedbackRequest) -> Dict[str, str]:
+async def submit_feedback(
+    payload: FeedbackRequest,
+    current_user: Dict[str, Any] = Depends(get_authenticated_user),
+) -> Dict[str, str]:
     try:
         bean_data = payload.bean
         recipe = payload.recipe
@@ -1190,6 +1227,7 @@ async def submit_feedback(payload: FeedbackRequest) -> Dict[str, str]:
 
         async with httpx.AsyncClient(base_url=rag_service_url, timeout=30.0) as client:
             response = await client.post("/feedback", json={
+                "user_id": current_user["user_id"],
                 "id": rid,
                 "text": text,
                 "meta": sanitized_meta

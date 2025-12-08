@@ -8,14 +8,16 @@ from chromadb.utils import embedding_functions
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from .query import bean_text_from_obj, extract_brewing, extract_evaluation
+from .ingest import ingest_records, iter_json_any
 
 DEFAULT_COLLECTION = "coffee_chunks"
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_PERSIST_DIR = Path(__file__).resolve().parent.parent / "indexes" / "chroma"
+DEFAULT_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "raw" / "coffee_brew_logs_sample.jsonl"
 
 
 class RagQuery(BaseModel):
+    user_id: str = Field(..., description="Unique identifier for the user.")
     bean: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Structured description of the coffee bean that will be converted into query text.",
@@ -68,18 +70,42 @@ class RagResponse(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def _get_collection(persist_dir: str, collection: str = DEFAULT_COLLECTION):
+def _get_client(persist_dir: str):
     if not persist_dir:
         persist_dir = str(DEFAULT_PERSIST_DIR)
     path = Path(persist_dir)
     if not path.exists():
-        raise FileNotFoundError(f"RAG index directory not found: {path}")
+         path.mkdir(parents=True, exist_ok=True)
 
-    client = chromadb.PersistentClient(path=str(path))
+    return chromadb.PersistentClient(path=str(path))
+
+def _get_collection(client, collection_name: str):
     embedding = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=DEFAULT_MODEL
     )
-    return client.get_or_create_collection(collection, embedding_function=embedding)
+    return client.get_or_create_collection(collection_name, embedding_function=embedding)
+
+def _ensure_user_collection(client, user_id: str):
+    collection_name = f"rag_{user_id}"
+    try:
+        # Check if collection exists by trying to get it
+        # Note: Chroma's get_collection raises ValueError if not found
+        client.get_collection(collection_name)
+    except ValueError:
+        # Collection doesn't exist, create and populate it
+        print(f"Initializing collection for user {user_id}...")
+        collection = _get_collection(client, collection_name)
+        
+        # Load default data
+        default_data_path = os.getenv("DEFAULT_DATA_PATH", str(DEFAULT_DATA_PATH))
+        if os.path.exists(default_data_path):
+            records = list(iter_json_any(default_data_path))
+            ingest_records(records, collection)
+            print(f"Ingested {len(records)} default records for user {user_id}")
+        else:
+            print(f"Warning: Default data not found at {default_data_path}")
+            
+    return _get_collection(client, collection_name)
 
 
 def _compute_evaluation_score(evaluation: Optional[Dict[str, Any]]) -> float:
@@ -242,7 +268,9 @@ def create_app() -> FastAPI:
     @app.post("/rag", response_model=RagResponse)
     def rag(payload: RagQuery) -> RagResponse:
         persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
-        collection = _get_collection(persist_dir)
+        client = _get_client(persist_dir)
+        collection = _ensure_user_collection(client, payload.user_id)
+        
         query_text = _build_query_text(payload)
         results = _run_query(
             collection,
@@ -255,6 +283,7 @@ def create_app() -> FastAPI:
         return RagResponse(query=query_text, results=results)
 
     class FeedbackPayload(BaseModel):
+        user_id: str
         id: str
         text: str
         meta: Dict[str, Any]
@@ -262,7 +291,9 @@ def create_app() -> FastAPI:
     @app.post("/feedback", status_code=201)
     def feedback(payload: FeedbackPayload) -> Dict[str, str]:
         persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
-        collection = _get_collection(persist_dir)
+        client = _get_client(persist_dir)
+        collection = _ensure_user_collection(client, payload.user_id)
+        
         collection.upsert(
             ids=[payload.id],
             documents=[payload.text],

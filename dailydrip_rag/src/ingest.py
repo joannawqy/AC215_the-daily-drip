@@ -117,5 +117,36 @@ def main():
 
     print(f"Wrote records to {out}")
 
+def ingest_records(records: list, collection) -> None:
+    """
+    Ingest a list of records (dicts) into a ChromaDB collection.
+    Each record is processed by make_record to generate ID, text, and meta.
+    """
+    ids = []
+    documents = []
+    metadatas = []
+    
+    for record in records:
+        processed = make_record(record)
+        ids.append(processed["id"])
+        documents.append(processed["text"])
+        
+        # Sanitize metadata for ChromaDB (no nested dicts/lists allowed in values usually, 
+        # but we'll use a simple sanitizer or rely on the caller/make_record to be clean enough.
+        # make_record returns 'meta' which is already flattened by flatten().
+        # However, flatten() might still leave some types Chroma doesn't like if not careful.
+        # For safety, we can convert non-primitives to strings if needed, 
+        # but 'flatten' in this file produces primitives mostly.
+        # Let's assume flatten() does its job for now or use the one from index.py if we could import it.
+        # For now, we use the flat dict directly.
+        metadatas.append(processed["meta"])
+        
+    if ids:
+        collection.upsert(
+            ids=ids,
+            documents=documents,
+            metadatas=metadatas
+        )
+
 if __name__ == "__main__":
     main()
