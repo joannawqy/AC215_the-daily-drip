@@ -98,14 +98,18 @@ def test_generate_recipe_uses_mocked_openai(monkeypatch):
             "pours": [{"start": 0, "end": 30, "water_added": 288}],
         }
     }
-    content = "```json\n" + json.dumps(recipe_payload) + "\n```"
+    func_args_json = json.dumps(recipe_payload)
 
     class DummyClient:
         def __init__(self):
             self.chat = SimpleNamespace(
                 completions=SimpleNamespace(
                     create=lambda **kwargs: SimpleNamespace(
-                        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                        choices=[SimpleNamespace(
+                            message=SimpleNamespace(
+                                function_call=SimpleNamespace(arguments=func_args_json)
+                            )
+                        )]
                     )
                 )
             )

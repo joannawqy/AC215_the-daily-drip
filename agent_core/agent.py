@@ -592,6 +592,10 @@ def fetch_references(
     )
 
 
+# Alias for backward compatibility with tests
+query_reference_recipes = fetch_references
+
+
 @lru_cache(maxsize=1)
 def _get_openai_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
