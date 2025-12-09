@@ -189,6 +189,7 @@ def _list_to_str(value: Any) -> Any:
 def _bean_text_from_obj(obj: Dict[str, Any]) -> str:
     # Simplified bean text constructor matching the logic of the agent
     flat = _flatten_dict(obj)
+    parts = []
     columns = [
         "bean.name",
         "bean.origin",
