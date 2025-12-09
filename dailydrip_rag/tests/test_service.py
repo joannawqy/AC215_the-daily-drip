@@ -40,6 +40,7 @@ class TestRagService:
     def test_query_with_text(self, client):
         """Test querying with free text."""
         payload = {
+            "user_id": "test-user",
             "query": "Ethiopian coffee with fruity notes",
             "k": 3
         }
@@ -52,6 +53,7 @@ class TestRagService:
     def test_query_with_bean_object(self, client):
         """Test querying with a bean object."""
         payload = {
+            "user_id": "test-user",
             "bean": {
                 "name": "Ethiopian Yirgacheffe",
                 "process": "Washed",
@@ -67,6 +69,7 @@ class TestRagService:
     def test_query_with_record(self, client):
         """Test querying with a full record."""
         payload = {
+            "user_id": "test-user",
             "record": {
                 "bean": {
                     "name": "Colombian Supremo",
@@ -84,6 +87,7 @@ class TestRagService:
     def test_query_invalid_k(self, client):
         """Test query with invalid k parameter."""
         payload = {
+            "user_id": "test-user",
             "query": "test",
             "k": 20  # Exceeds maximum
         }
@@ -92,7 +96,7 @@ class TestRagService:
     
     def test_query_no_input(self, client):
         """Test query with no input parameters."""
-        payload = {"k": 3}
+        payload = {"user_id": "test-user", "k": 3}
         response = client.post("/rag", json=payload)
         # Should handle gracefully or return error
         assert response.status_code in [200, 400, 422]
