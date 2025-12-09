@@ -274,14 +274,15 @@ class TestBrewEndpoints:
         register_response = client.post("/auth/register", json=register_payload)
         token = register_response.json()["token"]
         
-        # Brew recipe with bean dict
+        # Brew recipe with bean dict (disable RAG to avoid external service calls)
         brew_payload = {
             "bean": {
                 "name": "Brew Bean",
                 "origin": "Ethiopia",
                 "process": "Washed"
             },
-            "brewer": "V60"
+            "brewer": "V60",
+            "rag_enabled": False
         }
         response = client.post("/brew", json=brew_payload, headers={"X-Auth-Token": token})
         assert response.status_code == 200
@@ -300,14 +301,15 @@ class TestBrewEndpoints:
         register_response = client.post("/auth/register", json=register_payload)
         token = register_response.json()["token"]
         
-        # Brew with note
+        # Brew with note (disable RAG to avoid external service calls)
         brew_payload = {
             "bean": {
                 "name": "Note Bean",
                 "origin": "Colombia"
             },
             "brewer": "April",
-            "note": "Make it strong"
+            "note": "Make it strong",
+            "rag_enabled": False
         }
         response = client.post("/brew", json=brew_payload, headers={"X-Auth-Token": token})
         assert response.status_code == 200
