@@ -27,5 +27,5 @@ spec:
               key: key
         resources:
           requests:
-            cpu: "3500m"
+            cpu: "1500m"
             memory: "8Gi"

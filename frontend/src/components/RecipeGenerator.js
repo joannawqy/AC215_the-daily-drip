@@ -89,9 +89,9 @@ function formatPourStep(step, index) {
   return (
     <div
       key={`${step.start}-${step.end}-${index}`}
-      className="flex items-start gap-3 bg-coffee-50 rounded-lg p-3 border border-coffee-100"
+      className="flex items-start gap-3 bg-coffee-50 rounded-lg p-2 sm:p-3 border border-coffee-100"
     >
-      <div className="flex-shrink-0 w-12 h-12 bg-coffee-700 text-white rounded-full flex items-center justify-center">
+      <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-coffee-700 text-white rounded-full flex items-center justify-center">
         <Droplet size={20} />
       </div>
       <div className="flex-1">
@@ -196,7 +196,7 @@ function FeedbackForm({ onSubmit, isSubmitting }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md p-6 border border-coffee-100 space-y-4">
+    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md p-4 sm:p-6 border border-coffee-100 space-y-4">
       <h4 className="font-bold text-coffee-900 flex items-center gap-2">
         <Sparkles size={18} className="text-coffee-700" />
         Rate this Brew
@@ -411,7 +411,7 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
 
   return (
     <div className="space-y-6">
-      <section className="bg-white rounded-2xl shadow-sm border border-coffee-100 p-6">
+      <section className="bg-white rounded-2xl shadow-sm border border-coffee-100 p-4 sm:p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-bold text-coffee-900 flex items-center gap-2">
@@ -649,7 +649,7 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
 
       {session && (
         <section className="space-y-6 animate-fadeIn">
-          <div className="bg-gradient-to-r from-coffee-700 to-coffee-800 rounded-2xl shadow-md p-6 text-white">
+          <div className="bg-gradient-to-r from-coffee-700 to-coffee-800 rounded-2xl shadow-md p-4 sm:p-6 text-white">
             <div className="flex items-center gap-2 text-sm uppercase tracking-wide text-coffee-200 mb-2">
               <CheckCircle2 size={16} />
               Agent response ready
@@ -658,7 +658,7 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
             <p className="text-coffee-100 text-sm mb-4">
               {session.note ? `Preference: ${session.note}` : 'Balanced pour-over plan tailored to your bean.'}
             </p>
-            <div className="flex flex-wrap gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:gap-4 text-sm">
               <span className="flex items-center gap-1">
                 <Coffee size={16} />
                 {session.recipe?.brewing?.dose || '--'} g coffee
@@ -735,7 +735,7 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
                     </div>
                     <p className="text-sm text-coffee-800 mb-2">{ref.bean_text}</p>
                     {ref.brewing && (
-                      <div className="grid grid-cols-2 gap-2 text-xs text-coffee-700">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-coffee-700">
                         <span>Brewer: {ref.brewing.brewer || 'N/A'}</span>
                         <span>Temperature: {ref.brewing.temperature || '—'}°C</span>
                         <span>Dose: {ref.brewing.dose || '—'}g</span>
@@ -767,7 +767,7 @@ const RecipeGenerator = ({ beans, onRefreshBeans }) => {
                 <Clock size={18} />
                 ASCII flow
               </h4>
-              <pre className="text-xs overflow-x-auto whitespace-pre-wrap">{asciiVisualization}</pre>
+              <pre className="text-xs overflow-x-auto whitespace-pre">{asciiVisualization}</pre>
             </div>
           )}
 

@@ -145,7 +145,7 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-50 to-coffee-100">
       <header className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-coffee-900 flex items-center gap-2">
               ☕ The Daily Drip
@@ -168,7 +168,7 @@ function AppShell() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
           <aside className="bg-white rounded-2xl shadow-sm border border-coffee-100 p-4">
             <nav className="space-y-2">
