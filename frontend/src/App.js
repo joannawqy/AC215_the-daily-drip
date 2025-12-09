@@ -73,10 +73,24 @@ function AppShell() {
 
   const handleDeleteBean = useCallback(
     async (beanId) => {
-      await deleteBean(beanId);
+      // Optimistic update: remove immediately from UI
       setBeans((prev) => prev.filter((entry) => entry.bean_id !== beanId));
+
+      try {
+        await deleteBean(beanId);
+      } catch (err) {
+        const isNotFound = err.message.includes('404') || err.message.toLowerCase().includes('not found');
+
+        // If error is NOT "Not Found", it means the deletion failed unexpectedly. Revert UI by reloading.
+        if (!isNotFound) {
+          console.error('Failed to delete bean, reloading:', err);
+          loadBeans();
+          // We could also show a toast/alert here
+        }
+        // If it was 404, it means it's already gone, so our optimistic removal was correct.
+      }
     },
-    [],
+    [loadBeans],
   );
 
   const navigation = useMemo(
@@ -131,7 +145,7 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-50 to-coffee-100">
       <header className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-coffee-900 flex items-center gap-2">
               ☕ The Daily Drip
@@ -154,7 +168,7 @@ function AppShell() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
           <aside className="bg-white rounded-2xl shadow-sm border border-coffee-100 p-4">
             <nav className="space-y-2">
@@ -162,11 +176,10 @@ function AppShell() {
                 <button
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
-                    activeSection === item.id
-                      ? 'bg-coffee-700 text-white shadow-md'
-                      : 'text-coffee-700 hover:bg-coffee-100'
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${activeSection === item.id
+                    ? 'bg-coffee-700 text-white shadow-md'
+                    : 'text-coffee-700 hover:bg-coffee-100'
+                    }`}
                 >
                   {item.icon}
                   <span className="font-semibold">{item.label}</span>

@@ -15,7 +15,7 @@ from .agent import (
     generate_recipe,
     normalize_recipe,
     validate_recipe,
-    query_reference_recipes,
+    fetch_references,
     DEFAULT_RAG_PERSIST_DIR,
 )
 
@@ -81,7 +81,7 @@ class IntegratedCoffeeAgent:
         references = []
         if self.rag_enabled:
             try:
-                references = query_reference_recipes(
+                references = fetch_references(
                     bean_info,
                     persist_dir=self.rag_persist_dir,
                     k=self.rag_k,

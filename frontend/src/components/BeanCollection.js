@@ -121,12 +121,23 @@ function BeanCollection({ beans, loading, onCreate, onUpdate, onDelete }) {
     }
   };
 
+  const [deletingIds, setDeletingIds] = useState(new Set());
+
   const handleDelete = async (beanId) => {
     const confirmDelete = window.confirm('Delete this bean from your library?');
     if (!confirmDelete) {
       return;
     }
-    await onDelete(beanId);
+    setDeletingIds((prev) => new Set(prev).add(beanId));
+    try {
+      await onDelete(beanId);
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(beanId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -233,7 +244,12 @@ function BeanCollection({ beans, loading, onCreate, onUpdate, onDelete }) {
                         </button>
                         <button
                           onClick={() => handleDelete(bean.bean_id)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
+                          disabled={deletingIds.has(bean.bean_id)}
+                          className={`transition-colors ${
+                            deletingIds.has(bean.bean_id)
+                              ? 'text-coffee-300 cursor-not-allowed'
+                              : 'text-red-500 hover:text-red-700'
+                          }`}
                         >
                           <Trash2 size={18} />
                         </button>

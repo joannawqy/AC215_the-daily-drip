@@ -3,107 +3,20 @@ version: "3.9"
 x-shared-volumes: &shared-volumes
   - ./dailydrip_rag/data:/app/data
   - ./dailydrip_rag/indexes:/app/indexes
+  - ./dailydrip_rag:/app/dailydrip_rag
+  - ./agent_core:/app/agent_core
 
 services:
-  ingest:
-    build:
-      context: ./dailydrip_rag
-      dockerfile: Dockerfile
-    command:
-      - uv
-      - run
-      - python
-      - -m
-      - src.ingest
-      - --csv
-      - data/raw/ucdavis_sample.csv
-      - --out
-      - data/processed/records.jsonl
-    working_dir: /app
-    volumes:
-      - ./dailydrip_rag/data:/app/data
-    restart: "no"
-
-  chunk:
-    build:
-      context: ./dailydrip_rag
-      dockerfile: Dockerfile
-    command:
-      - uv
-      - run
-      - python
-      - -m
-      - src.chunk
-      - --records
-      - data/processed/records.jsonl
-      - --out
-      - data/processed/chunks.jsonl
-    working_dir: /app
-    depends_on:
-      ingest:
-        condition: service_completed_successfully
-    volumes:
-      - ./dailydrip_rag/data:/app/data
-    restart: "no"
-
-  index:
-    build:
-      context: ./dailydrip_rag
-      dockerfile: Dockerfile
-    command:
-      - uv
-      - run
-      - python
-      - -m
-      - src.index
-      - --chunks
-      - data/processed/chunks.jsonl
-      - --persist-dir
-      - indexes/chroma
-    working_dir: /app
-    depends_on:
-      chunk:
-        condition: service_completed_successfully
-    volumes: *shared-volumes
-    restart: "no"
-
-  rag:
-    build:
-      context: ./dailydrip_rag
-      dockerfile: Dockerfile
-    command:
-      - uv
-      - run
-      - python
-      - -m
-      - src.service
-    working_dir: /app
-    depends_on:
-      index:
-        condition: service_completed_successfully
-    environment:
-      RAG_PERSIST_DIR: /app/indexes/chroma
-    ports:
-      - "8000:8000"
-    volumes: *shared-volumes
-
-  agent:
+  app:
     build:
       context: .
-      dockerfile: Dockerfile.agent
-    command:
-      - uvicorn
-      - agent_core.agent:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "9000"
-    working_dir: /app
-    depends_on:
-      rag:
-        condition: service_started
+      dockerfile: Dockerfile.monolith
+    ports:
+      - "80:80" # Frontend
+      - "8000:8000" # RAG (Debug)
+      - "9000:9000" # Agent (Debug)
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      RAG_SERVICE_URL: http://rag:8000
-    ports:
-      - "9000:9000"
+      # RAG_PERSIST_DIR and RAG_SERVICE_URL are set in supervisord.conf or Dockerfile
+      # but we can override here if needed.
+    volumes: *shared-volumes

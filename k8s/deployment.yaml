@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daily-drip-deployment
+  labels:
+    app: daily-drip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: daily-drip
+  template:
+    metadata:
+      labels:
+        app: daily-drip
+    spec:
+      containers:
+      - name: daily-drip
+        image: gcr.io/ac215-480602/the-daily-drip-app:latest
+        env:
+        - name: PORT
+          value: "8000"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-api-key
+              key: key
+        resources:
+          requests:
+            cpu: "1500m"
+            memory: "8Gi"

@@ -1,0 +1,3 @@
+name: daily-drip-infra
+runtime: python
+description: A minimal Pulumi Python project for GKE and Application Deployment
