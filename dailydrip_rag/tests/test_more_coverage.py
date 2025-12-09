@@ -79,16 +79,23 @@ def test_compute_evaluation_score_partial_metrics():
 
 def test_build_query_text_prefers_structured_record():
     """_build_query_text should derive text from bean structures when available."""
-    payload = RagQuery(record={"bean": {"name": "Kenya AA", "process": "Washed"}})
+    payload = RagQuery(user_id="test-user", record={"bean": {"name": "Kenya AA", "process": "Washed"}})
     query_text = _build_query_text(payload)
     assert "Kenya AA" in query_text
     assert "process" in query_text
 
-    direct_payload = RagQuery(query="search me")
+    direct_payload = RagQuery(user_id="test-user", query="search me")
     assert _build_query_text(direct_payload) == "search me"
-
+    
+    # Test with RagQuery that has user_id but no query/bean/record should raise HTTPException
+    empty_payload = RagQuery(user_id="test-user")
     with pytest.raises(HTTPException):
-        _build_query_text(RagQuery())
+        _build_query_text(empty_payload)
+    
+    # Test that RagQuery without user_id raises ValidationError (Pydantic validation)
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        RagQuery()
 
 
 def test_run_query_with_reranking_emphasizes_scores():

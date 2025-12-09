@@ -70,6 +70,7 @@ class TestRagServiceComprehensive:
     def test_rag_query_with_free_text(self, client):
         """Test RAG query with free text."""
         payload = {
+            "user_id": "test-user",
             "query": "fruity Ethiopian coffee with citrus notes",
             "k": 3
         }
@@ -84,6 +85,7 @@ class TestRagServiceComprehensive:
     def test_rag_query_with_bean_structure(self, client):
         """Test RAG query with structured bean data."""
         payload = {
+            "user_id": "test-user",
             "bean": {
                 "name": "Ethiopian Yirgacheffe",
                 "process": "Washed",
@@ -107,6 +109,7 @@ class TestRagServiceComprehensive:
     def test_rag_query_with_record(self, client):
         """Test RAG query with full record."""
         payload = {
+            "user_id": "test-user",
             "record": {
                 "bean": {
                     "name": "Colombian Supremo",
@@ -128,6 +131,7 @@ class TestRagServiceComprehensive:
     def test_rag_with_reranking_enabled(self, client):
         """Test RAG with evaluation reranking."""
         payload = {
+            "user_id": "test-user",
             "query": "sweet chocolate coffee",
             "k": 2,
             "use_evaluation_reranking": True,
@@ -145,6 +149,7 @@ class TestRagServiceComprehensive:
     def test_rag_with_reranking_disabled(self, client):
         """Test RAG without reranking."""
         payload = {
+            "user_id": "test-user",
             "query": "coffee",
             "k": 2,
             "use_evaluation_reranking": False
@@ -155,21 +160,22 @@ class TestRagServiceComprehensive:
     def test_rag_k_parameter_validation(self, client):
         """Test k parameter bounds."""
         # Test minimum k
-        response = client.post("/rag", json={"query": "test", "k": 1})
+        response = client.post("/rag", json={"user_id": "test-user", "query": "test", "k": 1})
         assert response.status_code == 200
         
         # Test maximum k
-        response = client.post("/rag", json={"query": "test", "k": 10})
+        response = client.post("/rag", json={"user_id": "test-user", "query": "test", "k": 10})
         assert response.status_code == 200
         
         # Test k > 10 should fail validation
-        response = client.post("/rag", json={"query": "test", "k": 15})
+        response = client.post("/rag", json={"user_id": "test-user", "query": "test", "k": 15})
         assert response.status_code == 422
     
     def test_rag_similarity_weight_validation(self, client):
         """Test similarity_weight parameter."""
         # Valid weight
         response = client.post("/rag", json={
+            "user_id": "test-user",
             "query": "test",
             "similarity_weight": 0.5
         })
@@ -177,6 +183,7 @@ class TestRagServiceComprehensive:
         
         # Weight > 1 should fail
         response = client.post("/rag", json={
+            "user_id": "test-user",
             "query": "test",
             "similarity_weight": 1.5
         })
@@ -184,7 +191,7 @@ class TestRagServiceComprehensive:
     
     def test_rag_result_structure(self, client):
         """Test that results have correct structure."""
-        response = client.post("/rag", json={"query": "test coffee", "k": 2})
+        response = client.post("/rag", json={"user_id": "test-user", "query": "test coffee", "k": 2})
         assert response.status_code == 200
         data = response.json()
         
@@ -202,13 +209,14 @@ class TestRagServiceComprehensive:
     def test_rag_with_empty_query(self, client):
         """Test behavior with empty/null inputs."""
         # Empty query string should still work (will use empty string)
-        response = client.post("/rag", json={"query": "", "k": 1})
+        response = client.post("/rag", json={"user_id": "test-user", "query": "", "k": 1})
         # This might be 200, 400, or 422 depending on validation
         assert response.status_code in [200, 400, 422]
     
     def test_rag_with_complex_bean_data(self, client):
         """Test with complex nested bean data."""
         payload = {
+            "user_id": "test-user",
             "bean": {
                 "name": "Geisha",
                 "process": "Washed",
@@ -231,6 +239,7 @@ class TestRagServiceComprehensive:
     def test_rag_retrieval_multiplier(self, client):
         """Test retrieval multiplier parameter."""
         payload = {
+            "user_id": "test-user",
             "query": "test",
             "k": 2,
             "retrieval_multiplier": 5

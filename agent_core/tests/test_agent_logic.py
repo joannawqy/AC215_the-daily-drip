@@ -98,14 +98,18 @@ def test_generate_recipe_uses_mocked_openai(monkeypatch):
             "pours": [{"start": 0, "end": 30, "water_added": 288}],
         }
     }
-    content = "```json\n" + json.dumps(recipe_payload) + "\n```"
+    func_args_json = json.dumps(recipe_payload)
 
     class DummyClient:
         def __init__(self):
             self.chat = SimpleNamespace(
                 completions=SimpleNamespace(
                     create=lambda **kwargs: SimpleNamespace(
-                        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                        choices=[SimpleNamespace(
+                            message=SimpleNamespace(
+                                function_call=SimpleNamespace(arguments=func_args_json)
+                            )
+                        )]
                     )
                 )
             )
@@ -173,7 +177,7 @@ def test_query_reference_routing(monkeypatch, tmp_path):
     monkeypatch.setattr(agent, "_fetch_references_via_local_index", fake_local)
 
     bean = {"bean": {"name": "Test"}}
-    assert agent.query_reference_recipes(bean, rag_service_url="https://example.com", k=2)[0]["id"] == "service"
+    assert agent.query_reference_recipes(bean, rag_service_url="https://example.com", k=2, user_id="test-user")[0]["id"] == "service"
     assert service_calls
 
     assert agent.query_reference_recipes(bean, rag_service_url=None, persist_dir=tmp_path, k=1)[0]["id"] == "local"
