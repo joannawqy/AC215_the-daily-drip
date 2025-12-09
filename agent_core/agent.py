@@ -48,13 +48,12 @@ region, roast_level, roasted_days, altitude, and flavor_notes. The brewer is one
 ["V60", "April", "Orea", "Origami"].
 
 Create a recipe that respects the following constraints:
-- temperature: integer Celsius, usually 88-96. Lighter roasts often need hotter water.
-- grinding_size: integer clicks on a Comandante C40 grinder, usually 18-28. Lower is finer.
-- dose: integer grams of coffee, typically 13-20 g. Flatter brewers (April, Orea) lean lower.
-- target_water: integer grams, usually 200-320 g. Keep the brew ratio between 1:15 and 1:17.
+- temperature: integer Celsius, usually **88-96**. Lighter roasts often need hotter water.
+- grinding_size: integer clicks on a Comandante C40 grinder, usually **20-28**. Lower is finer.
+- dose: integer grams of coffee, typically **13-20** g. Flatter brewers (April, Orea) lean lower.
+- target_water: integer grams, usually **200-320** g. Keep the brew ratio between **1:15** and **1:17**.
 - pours: list of pour steps. Each step has start, end (seconds), and water_added (grams).
   * The first step should bloom at time 0.
-  * Each step length (end - start) is usually 5-20 seconds.
   * Sum of water_added must equal target_water.
 - Always echo back the brewer from the input exactly.
 

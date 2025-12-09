@@ -32,7 +32,7 @@
       },
       {
         "start": 70,
-        "end": 120,
+        "end": 111,
         "water_added": 100
       }
     ]
@@ -122,12 +122,12 @@
     "pours": [
       {
         "start": 0,
-        "end": 30,
+        "end": 25,
         "water_added": 70
       },
       {
-        "start": 30,
-        "end": 90,
+        "start": 25,
+        "end": 80,
         "water_added": 90
       },
       {
@@ -172,11 +172,11 @@
     "pours": [
       {
         "start": 0,
-        "end": 30,
+        "end": 28,
         "water_added": 50
       },
       {
-        "start": 30,
+        "start": 28,
         "end": 70,
         "water_added": 70
       },
@@ -222,11 +222,11 @@
     "pours": [
       {
         "start": 0,
-        "end": 30,
+        "end": 28,
         "water_added": 60
       },
       {
-        "start": 30,
+        "start": 28,
         "end": 80,
         "water_added": 90
       },
