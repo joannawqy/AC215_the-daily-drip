@@ -56,6 +56,7 @@ Create a recipe that respects the following constraints:
   * The first step should bloom at time 0.
   * Sum of water_added must equal target_water.
 - Always echo back the brewer from the input exactly.
+- You MUST ensure grind size is between 20-28. It is unacceptable to violate this.
 
 Your output must be a single JSON object with this structure:
 {
@@ -86,6 +87,7 @@ RAG_COLLECTION = "coffee_chunks"
 RAG_MODEL = "all-MiniLM-L6-v2"
 BEAN_COLUMNS = [
     "bean.name",
+    "bean.origin",
     "bean.process",
     "bean.variety",
     "bean.region",
@@ -286,9 +288,15 @@ def bean_text_from_obj(obj: Dict[str, Any]) -> str:
     flat = flatten_dict(obj) if has_nested else obj
     parts: List[str] = []
     for key in BEAN_COLUMNS:
-        val = _list_to_str(flat.get(key))
+        val = flat.get(key)
         if val is None:
             continue
+        if isinstance(val, list):
+            val = ", ".join(map(str, val))
+        
+        if val == "":
+            continue
+            
         parts.append(f"{key}: {val}")
     return " | ".join(parts)
 
@@ -358,6 +366,7 @@ def _fetch_references_via_service(
     *,
     rag_service_url: str,
     k: int,
+    user_id: str,
     use_evaluation_reranking: bool = True,
     similarity_weight: float = 0.7,
     retrieval_multiplier: int = 3,
@@ -369,6 +378,7 @@ def _fetch_references_via_service(
         raise ValueError("RAG service URL must not be empty.")
 
     payload: Dict[str, Any] = {
+        "user_id": user_id,
         "k": k,
         "use_evaluation_reranking": use_evaluation_reranking,
         "similarity_weight": similarity_weight,
@@ -1016,17 +1026,7 @@ def register_user(payload: RegisterRequest) -> AuthResponse:
         _email_index[email_key] = user_id
         _persist_user_store()
 
-    # Initialize RAG collection for the new user
-    rag_url = os.getenv("RAG_SERVICE_URL") or DEFAULT_RAG_SERVICE_URL
-    if httpx and rag_url:
-        try:
-            # Fire-and-forget-ish: fail silently or log warning to not block registration
-            # Use a short timeout
-            with httpx.Client(base_url=rag_url, timeout=5.0) as client:
-                client.post("/init_user", json={"user_id": user_id})
-        except Exception as e:
-            # Log but don't fail registration
-            print(f"Warning: Failed to initialize RAG collection for {user_id}: {e}")
+
     token = _issue_token(user_id)
     return AuthResponse(token=token, user=UserSummary(**_user_to_public_payload(user_record)))
 

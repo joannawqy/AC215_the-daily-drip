@@ -120,6 +120,7 @@ def test_run_query_with_reranking_emphasizes_scores():
     results = _run_query(
         collection,
         query_text="citrus",
+        user_id="test_user",
         k=2,
         use_evaluation_reranking=True,
         similarity_weight=0.5,
@@ -145,6 +146,7 @@ def test_run_query_without_reranking_preserves_order():
     results = _run_query(
         collection,
         query_text="berry",
+        user_id="test_user",
         k=2,
         use_evaluation_reranking=False,
         similarity_weight=0.8,

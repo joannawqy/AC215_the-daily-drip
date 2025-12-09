@@ -79,40 +79,38 @@ def _get_client(persist_dir: str):
 
     return chromadb.PersistentClient(path=str(path))
 
-def _get_collection(client):
-    embedding = embedding_functions.SentenceTransformerEmbeddingFunction(
+@lru_cache(maxsize=1)
+def _get_embedding_function():
+    return embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=DEFAULT_MODEL
     )
+
+def _get_collection(client):
+    embedding = _get_embedding_function()
     return client.get_or_create_collection(DEFAULT_COLLECTION, embedding_function=embedding)
 
-def _ensure_global_collection(client):
+def _populate_default_data(client):
     """
-    Ensure the global collection exists and is populated with default public data.
+    Populate the global collection with default public data.
     """
-    try:
-        # Check if collection has any data
-        collection = client.get_collection(DEFAULT_COLLECTION)
-        if collection.count() > 0:
-            return collection
-    except Exception:
-        pass # Collection doesn't exist or is empty, proceed to populate
-
-    print(f"Initializing global collection '{DEFAULT_COLLECTION}'...")
+    print(f"Initializing/Updating global collection '{DEFAULT_COLLECTION}'...")
     collection = _get_collection(client)
     
     # Load default data
     default_data_path = os.getenv("DEFAULT_DATA_PATH", str(DEFAULT_DATA_PATH))
     if os.path.exists(default_data_path):
         records = list(iter_json_any(default_data_path))
-        # Important: Mark default records as public
+        # Important: Mark default records as public (user_id=None)
+        # We always upsert to ensure metadata (like access="public") is correct
         for r in records:
             r["access"] = "public"
+            # Ensure user_id is not set for default records
+            if "user_id" in r:
+                del r["user_id"]
         ingest_records(records, collection)
-        print(f"Ingested {len(records)} default public records.")
+        print(f"Ingested/Updated {len(records)} default public records.")
     else:
         print(f"Warning: Default data not found at {default_data_path}")
-            
-    return collection
 
 
 def _compute_evaluation_score(evaluation: Optional[Dict[str, Any]]) -> float:
@@ -171,21 +169,7 @@ def _build_query_text(payload: RagQuery) -> str:
         )
 
     query_source = record if "bean" in record else {"bean": bean}
-    from agent_core.agent import bean_text_from_obj # Start relying on shared utility or duplicate logic if needed
-    # For now, duplicate simpler logic to avoid circular import if strict separation is needed
-    # But wait, bean_text_from_obj is in agent_core, RAG service is separate.
-    # We should have a shared util. For this refactor, I will inline a simple converter or rely on existing one if imported.
-    # The previous code imported `bean_text_from_obj` from WHERE? 
-    # Ah, it didn't import it in service.py, it was doing something else? 
-    # Wait, service.py used _build_query_text which called bean_text_from_obj? No, previous code snippet:
-    # "return bean_text_from_obj(query_source)" <-- where was this defined?
-    # It seems I missed copying the helper function definition in previous view or it was imported. 
-    # Looking at imports: `from .ingest import ingest_records, iter_json_any`. 
-    # It seems `bean_text_from_obj` must be defined in this file or imported. 
-    # Let me re-check the previous file content. 
-    # Ah, I don't see it defined in lines 1-332. It might be I missed it or it was imported from `.ingest`?
-    # To be safe, I will implement a robust text builder here.
-    return str(query_source) # Fallback if specific logic is missing, but better to implement properly.
+    return _bean_text_from_obj(query_source)
 
 
 # Re-implementing helper for safety
@@ -199,15 +183,26 @@ def _flatten_dict(data: Dict[str, Any], parent: str = "", sep: str = ".") -> Dic
             flattened[new_key] = value
     return flattened
 
+def _list_to_str(value: Any) -> Any:
+    return ", ".join(map(str, value)) if isinstance(value, list) else value
+
 def _bean_text_from_obj(obj: Dict[str, Any]) -> str:
     # Simplified bean text constructor matching the logic of the agent
     flat = _flatten_dict(obj)
-    parts = []
-    # Key columns from agent.py
-    columns = ["bean.name", "bean.process", "bean.variety", "bean.region", "bean.roast_level", "bean.flavor_notes"]
+    columns = [
+        "bean.name",
+        "bean.origin",
+        "bean.process",
+        "bean.variety",
+        "bean.region",
+        "bean.roast_level",
+        "bean.roasted_days",
+        "bean.altitude",
+        "bean.flavor_notes",
+    ]
     for key in columns:
-        val = flat.get(key)
-        if val:
+        val = _list_to_str(flat.get(key))
+        if val is not None and val != "":
             parts.append(f"{key}: {val}")
     # If no specific columns matched (e.g. flat structure), just dump all
     if not parts:
@@ -312,6 +307,12 @@ def _run_query(
 def create_app() -> FastAPI:
     app = FastAPI(title="DailyDrip RAG Service", version="0.2.0")
 
+    @app.on_event("startup")
+    def startup_event():
+        persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
+        client = _get_client(persist_dir)
+        _populate_default_data(client)
+
     @app.get("/healthz")
     def health() -> Dict[str, str]:
         return {"status": "ok"}
@@ -320,7 +321,7 @@ def create_app() -> FastAPI:
     def rag(payload: RagQuery) -> RagResponse:
         persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
         client = _get_client(persist_dir)
-        collection = _ensure_global_collection(client)
+        collection = _get_collection(client)
         
         query_text = _build_query_text(payload) # Should use robust builder
         
@@ -349,7 +350,7 @@ def create_app() -> FastAPI:
     def feedback(payload: FeedbackPayload) -> Dict[str, str]:
         persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
         client = _get_client(persist_dir)
-        collection = _ensure_global_collection(client)
+        collection = _get_collection(client)
         
         # Enforce user ownership in metadata
         meta = payload.meta.copy()
@@ -364,17 +365,7 @@ def create_app() -> FastAPI:
         )
         return {"status": "ok", "id": payload.id}
 
-    class InitUserPayload(BaseModel):
-        user_id: str
 
-    @app.post("/init_user", status_code=201)
-    def init_user(payload: InitUserPayload) -> Dict[str, str]:
-        # No-op: Data is shared, no per-user initialization needed.
-        # Just ensure global collection exists (lazy init)
-        persist_dir = os.getenv("RAG_PERSIST_DIR", str(DEFAULT_PERSIST_DIR))
-        client = _get_client(persist_dir)
-        _ensure_global_collection(client)
-        return {"status": "ok", "user_id": payload.user_id, "mode": "shared_collection"}
 
     return app
 
