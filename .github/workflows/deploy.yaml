@@ -22,10 +22,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
   
-    - name: Debug Secrets 
-    # Debug secrets to ensure they are set
-      run: echo "GCP_CREDENTIALS is set (length: ${#secrets.GCP_CREDENTIALS})"
-      shell: bash
+    - name: Debug Secrets
+      env:
+        CREDENTIALS_JSON: ${{ secrets.GCP_CREDENTIALS }}
+      run: |
+        if [ -n "$CREDENTIALS_JSON" ]; then
+          echo "GCP_CREDENTIALS is set (length: ${#CREDENTIALS_JSON})"
+        else
+          echo "GCP_CREDENTIALS is NOT set"
+        fi
 
     - name: Google Auth
       id: auth
