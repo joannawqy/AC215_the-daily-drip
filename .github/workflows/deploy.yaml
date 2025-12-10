@@ -79,8 +79,8 @@ jobs:
 
     - name: Get GKE Credentials
       env:
-        GKE_CLUSTER: daily-drip-cluster # TODO: Update this with your actual Cluster Name
-        GKE_ZONE: us-central1-a    # TODO: Update this with your actual Zone
+        GKE_CLUSTER: dailydrip-cluster # TODO: Update this with your actual Cluster Name
+        GKE_ZONE: us-central1    # TODO: Update this with your actual Zone
       run: |
         gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
 
