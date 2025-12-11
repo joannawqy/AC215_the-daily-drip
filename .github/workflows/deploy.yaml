@@ -54,7 +54,7 @@ jobs:
       run: |
         IMAGE_URI="$GAR_LOCATION/$PROJECT_ID/$APP_NAME:$IMAGE_TAG"
         echo "Building $IMAGE_URI..."
-        docker build -t $IMAGE_URI -f Dockerfile.monolith .
+        docker build -t $IMAGE_URI -f deployment/Dockerfile.monolith .
         docker push $IMAGE_URI
         # Also push latest for convenience
         docker tag $IMAGE_URI "$GAR_LOCATION/$PROJECT_ID/$APP_NAME:latest"

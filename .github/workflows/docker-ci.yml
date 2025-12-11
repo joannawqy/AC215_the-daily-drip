@@ -30,12 +30,12 @@ jobs:
     - name: Build Agent Image
       if: matrix.service == 'agent'
       run: |
-        docker build -f Dockerfile.agent -t dailydrip-agent:test .
+        docker build -f deployment/Dockerfile.agent -t dailydrip-agent:test .
     
     - name: Test Docker Compose
       if: matrix.service == 'dailydrip-rag'
       run: |
-        docker compose config
+        docker compose -f deployment/docker-compose.yml config
         echo "Docker Compose configuration is valid"
 
   integration-test:
@@ -52,7 +52,7 @@ jobs:
     - name: Start services with Docker Compose
       run: |
         # Start only the RAG service for testing
-        docker compose up -d rag-service || echo "Service startup attempted"
+        docker compose -f deployment/docker-compose.yml up -d rag-service || echo "Service startup attempted"
     
     - name: Wait for services
       run: |
@@ -67,4 +67,4 @@ jobs:
     - name: Stop services
       if: always()
       run: |
-        docker compose down
+        docker compose -f deployment/docker-compose.yml down
