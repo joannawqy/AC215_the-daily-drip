@@ -1,364 +1,291 @@
-# AC215 – Milestone 4 – DailyDrip
+# DailyDrip - AI-Powered Coffee Brewing Assistant
 
 [![codecov](https://codecov.io/gh/joannawqy/AC215_the-daily-drip/branch/milestone4/graph/badge.svg)](https://codecov.io/gh/joannawqy/AC215_the-daily-drip)
+
+**Final Project - AC215 Fall 2024**
 
 ## Team
 - **Team Name:** DailyDrip Collective
 - **Members:** Even Li, Joanna Wang, Jessica Wang, Zicheng Ma
 
-## Background & Motivation
-Coffee brewing is both an art and a science. Enthusiasts often struggle to dial in grind size, water ratio, pour schedule, and temperature to match their taste preferences. Keeping track of experiments can be overwhelming, especially when juggling multiple beans and brewers.
+## Overview
 
-DailyDrip combines consumer preference data, brewing logs, and generative AI to build a practical assistant that makes everyday coffee brewing easier, more personalized, and more enjoyable. The project targets three coordinated capabilities:
-1. **Brewing recipe agent** – recommends brewing parameters tailored to taste goals.
-2. **Visualization agent** – renders recipes as timelines that clarify pour cadence and amounts.
-3. **RAG-style knowledge base** – stores beans and past brews to ground future recommendations.
+DailyDrip is an intelligent coffee brewing assistant that combines AI-powered recipe generation, retrieval-augmented generation (RAG), and interactive visualizations to help coffee enthusiasts brew the perfect cup. The system learns from historical brewing data and user preferences to provide personalized brewing recommendations tailored to specific coffee beans and brewing equipment.
 
-## Project Scope
-- Implement a FastAPI brewing agent that generates complete JSON recipes from bean metadata.
-- Provide a visualization agent that converts recipes into HTML/Mermaid/ASCII timelines.
-- Maintain a Retrieval-Augmented Generation (RAG) pipeline (ingest → chunk → index → serve) to surface reference brews during recipe generation.
-- Build a React frontend with user authentication, bean library management, and interactive recipe generation.
-- Package the system in Docker containers and deliver reproducible commands for local testing.
+### Key Features
+- 🤖 **AI Recipe Generation** - GPT-4o-mini generates personalized brewing parameters
+- 🔍 **RAG-Enhanced Recommendations** - Retrieves similar recipes from ChromaDB vector database
+- 📊 **Multi-Format Visualizations** - HTML timelines, Mermaid diagrams, and ASCII art
+- 🌐 **Full-Stack Web Application** - React frontend with FastAPI backend
+- 🔐 **User Authentication** - Secure token-based auth with personal bean libraries
+- 🐳 **Containerized Architecture** - Docker monolith with nginx, RAG service, and API
 
-## System Architecture
+---
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        DailyDrip System                          │
-└─────────────────────────────────────────────────────────────────┘
+## Table of Contents
+1. [Prerequisites](#prerequisites)
+2. [Setup Instructions](#setup-instructions)
+3. [Deployment Instructions](#deployment-instructions)
+4. [Usage Guide](#usage-guide)
+5. [API Reference](#api-reference)
+6. [Known Issues and Limitations](#known-issues-and-limitations)
+7. [Project Architecture](#project-architecture)
+8. [Testing](#testing)
+9. [Additional Resources](#additional-resources)
 
-┌──────────────────┐
-│   React Frontend │  ← User Interface
-│   (Port 3000)    │     - Authentication & User Profile
-│                  │     - Bean Library Management
-│   Components:    │     - Recipe Generator
-│   - AuthLanding  │     - Visualization Display
-│   - Profile      │
-│   - BeanCollection│
-│   - RecipeGen    │
-└────────┬─────────┘
-         │ HTTPS/REST
-         ↓
-┌──────────────────┐     ┌─────────────────┐
-│  Agent Core API  │────→│   OpenAI API    │
-│  (Port 9000)     │     │                 │
-│                  │     │  - gpt-4o-mini  │
-│  FastAPI Endpoints:    │  - Recipe Gen   │
-│  - /auth/*       │     └─────────────────┘
-│  - /profile      │
-│  - /beans/*      │     ┌─────────────────┐
-│  - /brew         │────→│  RAG Service    │
-│  - /visualize    │     │  (Port 8000)    │
-└──────────────────┘     │                 │
-                         │  - ChromaDB     │
-         ↓               │  - Embeddings   │
-┌──────────────────┐     │  - Similarity   │
-│ Visualization    │     │    Search       │
-│ Agent V2         │     └─────────────────┘
-│                  │
-│  - HTML Timeline │            ↑
-│  - Mermaid Chart │            │
-│  - ASCII Art     │     ┌──────┴──────────┐
-└──────────────────┘     │  RAG Pipeline   │
-                         │                 │
-                         │  ingest → chunk │
-                         │         → index │
-                         └─────────────────┘
-```
+---
 
-## Repository Organization
+## Prerequisites
 
-The repository is organized into three main modules with clear separation of concerns:
-
-```
-AC215_the-daily-drip/
-├── README.md                           # This file - setup & usage guide
-├── INTEGRATION_USAGE.md                # Detailed agent integration guide
-├── LICENSE                             # MIT License
-├── Makefile                            # Docker workflow commands
-├── docker-compose.yml                  # Container orchestration
-├── Dockerfile.agent                    # Agent API container image
-├── .gitignore                          # Git ignore rules
-│
-├── CI-tests/                           # CI/CD Testing Configuration
-│   ├── .flake8                         # Python linting configuration
-│   ├── CI_SETUP_SUMMARY.md             # CI/CD pipeline documentation
-│   ├── QUICK_START_CI.md               # Quick CI setup guide
-│   ├── setup-tests.sh                  # Test environment setup script
-│   └── run-all-tests.sh                # Script to run all tests
-│
-├── agent_core/                         # Backend API & Agent Logic
-│   ├── __init__.py                     # Package initialization
-│   ├── agent.py                        # FastAPI brewing agent (main API)
-│   ├── integrated_agent.py             # End-to-end agent workflow
-│   ├── visualization_agent_v2.py       # Recipe visualization generator
-│   ├── agent_requirements.txt          # Python dependencies
-│   ├── requirements-dev.txt            # Development dependencies
-│   ├── pytest.ini                      # Test configuration
-│   └── tests/                          # Agent test suite
-│       ├── __init__.py
-│       ├── test_agent.py               # Core agent tests
-│       ├── test_agent_logic.py         # Helper function tests
-│       └── test_integrated_agent.py    # Integration tests
-│
-├── dailydrip_rag/                      # RAG Data Pipeline
-│   ├── README.md                       # RAG-specific documentation
-│   ├── Dockerfile                      # RAG service container
-│   ├── Makefile                        # RAG pipeline commands
-│   ├── pyproject.toml                  # Python package configuration
-│   ├── pytest.ini                      # Test configuration
-│   ├── .coveragerc                     # Coverage configuration
-│   ├── src/                            # RAG pipeline modules
-│   │   ├── __init__.py
-│   │   ├── ingest.py                   # Data ingestion from CSV/JSON
-│   │   ├── chunk.py                    # Text chunking for embeddings
-│   │   ├── index.py                    # ChromaDB vector indexing
-│   │   ├── query.py                    # Query utilities
-│   │   └── service.py                  # FastAPI RAG service
-│   ├── data/                           # Data storage
-│   │   ├── raw/                        # Raw input data (CSV/JSON)
-│   │   └── processed/                  # Processed JSONL files
-│   │       ├── records.jsonl           # Normalized records
-│   │       └── chunks.jsonl            # Embedded chunks
-│   ├── indexes/                        # Vector store
-│   │   └── chroma/                     # ChromaDB persistent index
-│   ├── scripts/                        # Utility scripts
-│   └── tests/                          # RAG test suite
-│       ├── conftest.py                 # Pytest fixtures
-│       ├── test_ingest.py
-│       ├── test_chunk.py
-│       ├── test_index.py
-│       ├── test_query.py
-│       ├── test_service.py
-│       ├── test_service_comprehensive.py
-│       └── test_more_coverage.py
-│
-├── frontend/                           # React Frontend Application
-│   ├── package.json                    # Node dependencies & scripts
-│   ├── package-lock.json               # Locked dependency versions
-│   ├── jest.config.js                  # Jest test configuration
-│   ├── tailwind.config.js              # Tailwind CSS configuration
-│   ├── postcss.config.js               # PostCSS configuration
-│   ├── .gitignore                      # Frontend-specific ignores
-│   ├── public/                         # Static assets
-│   │   ├── index.html
-│   │   ├── favicon.ico
-│   │   └── manifest.json
-│   └── src/                            # React source code
-│       ├── index.js                    # Application entry point
-│       ├── index.css                   # Global styles
-│       ├── App.js                      # Main application component
-│       ├── App.test.js                 # App component tests
-│       ├── App.comprehensive.test.js   # Comprehensive app tests
-│       ├── setupTests.js               # Test setup
-│       ├── components/                 # React components
-│       │   ├── AuthLanding.js          # Login/Register page
-│       │   ├── AuthLanding.test.js
-│       │   ├── Profile.js              # User profile & preferences
-│       │   ├── Profile.test.js
-│       │   ├── BeanCollection.js       # Bean library CRUD
-│       │   ├── BeanCollection.test.js
-│       │   ├── BeanCollection.comprehensive.test.js
-│       │   ├── RecipeGenerator.js      # Recipe generation UI
-│       │   ├── RecipeGenerator.test.js
-│       │   ├── RecipeGenerator.helpers.test.js
-│       │   └── RecipeGenerator.comprehensive.test.js
-│       ├── context/                    # React Context providers
-│       │   ├── AuthContext.js          # Authentication state management
-│       │   └── AuthContext.test.js
-│       └── services/                   # API client layer
-│           ├── agentClient.js          # Agent API client
-│           └── agentClient.test.js
-│
-├── .github/                            # GitHub configuration
-│   └── workflows/                      # CI/CD workflows
-│       ├── python-ci.yml               # Backend testing & coverage
-│       ├── frontend-ci.yml             # Frontend testing
-│       └── docker-ci.yml               # Docker build verification
-│
-├── data/                               # Application data (gitignored)
-│   └── user_store.jsonl                # User accounts & beans (development)
-│
-├── reports/                            # Project documentation
-│   └── MS2 Report.pdf                  # Milestone 2 report
-│
-├── scripts/                            # Utility scripts
-│
-└── tools/                              # Development tools
-    ├── bean_request.json               # Sample brew API request
-    ├── visualize_request.json          # Sample visualization request
-    └── save_visualization.py           # Visualization fetcher script
-```
-
-> **Note:** `dailydrip_rag/data` and `dailydrip_rag/indexes` contain small illustrative artifacts only. Do **not** commit large datasets or full production indexes to version control.
-
-## Technology Stack
-
-### Backend
-- **FastAPI** - Modern, high-performance Python web framework
-- **OpenAI API** - GPT-4o-mini for recipe generation
-- **ChromaDB** - Vector database for similarity search
-- **Sentence-Transformers** - `all-MiniLM-L6-v2` for text embeddings
-- **Pydantic** - Data validation and settings management
-- **httpx** - Async HTTP client for API calls
-
-### Frontend
-- **React 18** - Component-based UI library
-- **Tailwind CSS** - Utility-first CSS framework
-- **Lucide React** - Beautiful icon library
-- **Create React App** - Zero-configuration build setup
-
-### Infrastructure & DevOps
-- **Docker & Docker Compose** - Containerization and orchestration
-- **GitHub Actions** - CI/CD pipeline
-- **Codecov** - Test coverage reporting
-- **pytest** - Python testing framework
-- **Jest & React Testing Library** - JavaScript testing
-
-### Code Quality
-- **flake8** - Python linting
-- **black** - Python code formatting
-- **ESLint** - JavaScript linting
-- **coverage.py** - Python code coverage
-
-## Quick Start
-
-### Prerequisites
-- **Docker** & **Docker Compose** v2+
-- **Node.js** 16+ and **npm** (for frontend development)
-- **Python** 3.10+ (for local development)
+### Required Software
+- **Docker** 20.10+ and **Docker Compose** v2+
 - **OpenAI API Key** (required for recipe generation)
+
+### Optional (for local development)
+- **Node.js** 16+ and **npm** 8+
+- **Python** 3.11+
+- **Git**
+
+### System Requirements
+- **RAM:** 8GB minimum (for ChromaDB and model embeddings)
+- **Storage:** 2GB free space for Docker images and indexes
+- **OS:** macOS, Linux, or Windows with WSL2
+
+### API Keys and Credentials
+You'll need to obtain an OpenAI API key:
+1. Sign up at https://platform.openai.com/
+2. Create an API key in your account settings
+3. Set the environment variable: `export OPENAI_API_KEY="sk-..."`
+
+---
+
+## Setup Instructions
 
 ### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/joannawqy/AC215_the-daily-drip.git
 cd AC215_the-daily-drip
-git checkout milestone4
 ```
 
 ### 2. Set Environment Variables
 
 ```bash
-# Required: OpenAI API key
+# Required: OpenAI API key for recipe generation
 export OPENAI_API_KEY="your-api-key-here"
 
 # Optional: Custom configuration
 export RAG_SERVICE_URL="http://localhost:8000"
 export REACT_APP_AGENT_API_URL="http://localhost:9000"
-export FRONTEND_ORIGINS="http://localhost:3000,http://localhost:3001"
+export FRONTEND_ORIGINS="http://localhost:3000"
 ```
 
-### 3. Start the Full Stack (Docker)
+### 3. Start the Application
+
+The application runs as a monolithic Docker container with all services:
 
 ```bash
-# Build and start all services (RAG + Agent API)
-make run
+# Build and start the full application
+make start
 ```
 
-This command will:
-1. Build Docker images for RAG and Agent services
+This single command will:
+1. Build the Docker image (frontend + backend + RAG service)
 2. Run the RAG pipeline (ingest → chunk → index)
-3. Start the RAG service on port 8000
-4. Start the Agent API on port 9000
+3. Start nginx (port 80), RAG service (port 8000), and Agent API (port 9000)
+4. All services managed by supervisord
 
-### 4. Start the Frontend
+### 4. Access the Application
+
+Once the container is running:
+
+- **Web Application:** http://localhost (port 80)
+- **API Endpoints:** http://localhost/api (proxied through nginx)
+- **RAG Service (Debug):** http://localhost:8000
+- **Agent API (Debug):** http://localhost:9000
+
+### 5. Verify Installation
 
 ```bash
-# In a new terminal
-cd frontend
-npm install
-npm start
+# Check if all services are running
+docker compose ps
+
+# View logs
+docker compose logs -f app
+
+# Test API health
+curl http://localhost:8000/health
 ```
 
-The React app will open at [http://localhost:3000](http://localhost:3000)
+---
 
-### 5. Test the System
+## Deployment Instructions
 
-**Option A: Use the Frontend UI**
-1. Navigate to [http://localhost:3000](http://localhost:3000)
-2. Register a new account
-3. Add a coffee bean to your library
-4. Generate a recipe with visualization
+### Local Development Deployment
 
-**Option B: Use the API Directly**
+The easiest way to run the application locally:
 
 ```bash
-# Register a user
-curl -X POST http://localhost:9000/auth/register \
+# Start everything in one container
+make start
+
+# Stop the application
+make down
+
+# Clean data and rebuild
+make clean
+make start
+```
+
+### Google Cloud Platform (GCP) / Kubernetes Deployment
+
+#### Step 1: Build and Push Docker Image
+
+```bash
+# Build the monolithic image
+docker build -f Dockerfile.monolith -t the-daily-drip-app:latest .
+
+# Tag for Google Container Registry
+docker tag the-daily-drip-app:latest gcr.io/ac215-480602/the-daily-drip-app:latest
+
+# Push to GCR (requires gcloud authentication)
+docker push gcr.io/ac215-480602/the-daily-drip-app:latest
+```
+
+#### Step 2: Create Kubernetes Secret
+
+```bash
+# Create secret for OpenAI API key
+kubectl create secret generic openai-api-key \
+  --from-literal=key="your-openai-api-key-here"
+```
+
+#### Step 3: Deploy to Kubernetes
+
+```bash
+# Apply deployment configuration
+kubectl apply -f k8s/deployment.yaml
+
+# Apply service configuration (LoadBalancer)
+kubectl apply -f k8s/service.yaml
+
+# Check deployment status
+kubectl get pods
+kubectl get services
+```
+
+#### Step 4: Access Deployed Application
+
+```bash
+# Get external IP address
+kubectl get service daily-drip-service
+
+# Wait for EXTERNAL-IP to be assigned (may take a few minutes)
+# Access the application at: http://<EXTERNAL-IP>
+```
+
+### Infrastructure as Code (Pulumi)
+
+For automated infrastructure provisioning:
+
+```bash
+cd k8s/pulumi
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure Pulumi
+pulumi config set gcp:project ac215-480602
+pulumi config set image_tag latest
+pulumi config set-secret openai_key "your-key"
+
+# Deploy infrastructure
+pulumi up
+
+# Get outputs
+pulumi stack output service_ip
+```
+
+### Environment Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OPENAI_API_KEY` | OpenAI API key | None | Yes |
+| `RAG_SERVICE_URL` | RAG service endpoint | `http://localhost:8000` | No |
+| `RAG_PERSIST_DIR` | ChromaDB storage path | `/app/indexes/chroma` | No |
+| `RAG_COLLECTION` | ChromaDB collection name | `coffee_chunks` | No |
+| `PORT` | Application port (K8s) | `8000` | No |
+
+---
+
+## Usage Guide
+
+### Web Interface Usage
+
+#### 1. Register and Login
+
+1. Navigate to http://localhost
+2. Click "Create Account"
+3. Enter email, password, and name
+4. Login with your credentials
+
+#### 2. Set Taste Preferences
+
+1. Go to your Profile page
+2. Select preferred flavor notes (e.g., chocolate, fruity, floral)
+3. Choose preferred roast level (Light, Medium, Dark)
+4. Save preferences
+
+#### 3. Manage Your Bean Library
+
+1. Navigate to "My Beans"
+2. Click "Add New Bean"
+3. Fill in bean details:
+   - Name (e.g., "Ethiopia Sidamo Natural")
+   - Origin
+   - Process method (Natural, Washed, Honey)
+   - Roast level
+   - Roast date
+   - Flavor notes
+4. Save the bean to your library
+
+#### 4. Generate Brewing Recipes
+
+1. Go to "Recipe Generator"
+2. Select a bean from your library (or enter manually)
+3. Choose your brewer (V60, April, Orea, Origami)
+4. Add optional brewing notes
+5. Click "Generate Recipe"
+6. View the recipe with:
+   - Temperature and grind size
+   - Pour schedule with timing
+   - Interactive visualization timeline
+
+### API Usage Examples
+
+#### Example 1: Complete User Workflow
+
+```bash
+# Step 1: Register a new user
+TOKEN=$(curl -s -X POST http://localhost/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "coffee@example.com",
     "password": "secure123",
     "name": "Coffee Enthusiast"
-  }'
-
-# Save the token from the response
-TOKEN="<your-token-here>"
-
-# Create a bean
-curl -X POST http://localhost:9000/beans \
-  -H "Content-Type: application/json" \
-  -H "X-Auth-Token: $TOKEN" \
-  -d '{
-    "bean": {
-      "name": "Ethiopia Sidamo Natural",
-      "process": "Natural",
-      "variety": "Heirloom",
-      "origin": "Ethiopia",
-      "roast_level": "Light",
-      "roasted_on": "2024-11-15",
-      "altitude": "1800-2200m",
-      "flavor_notes": ["blueberry", "floral", "tea-like"]
-    }
-  }'
-
-# Generate a recipe
-curl -X POST http://localhost:9000/brew \
-  -H "Content-Type: application/json" \
-  -H "X-Auth-Token: $TOKEN" \
-  -d '{
-    "bean": {
-      "name": "Ethiopia Sidamo Natural",
-      "process": "Natural",
-      "variety": "Heirloom",
-      "roast_level": "Light",
-      "roasted_days": 8,
-      "flavor_notes": ["blueberry", "floral"]
-    },
-    "brewer": "V60",
-    "note": "I prefer bright acidity and light body"
-  }'
-```
-
-## Detailed Usage Examples
-
-### Example 1: Complete Workflow with Authentication
-
-```bash
-# Step 1: Register and login
-TOKEN=$(curl -s -X POST http://localhost:9000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "barista@example.com",
-    "password": "mypassword",
-    "name": "Alex Barista"
   }' | jq -r '.token')
 
-echo "Authenticated with token: $TOKEN"
-
-# Step 2: Set your taste preferences
-curl -X PUT http://localhost:9000/profile/preferences \
+# Step 2: Update taste preferences
+curl -X PUT http://localhost/api/profile/preferences \
   -H "Content-Type: application/json" \
   -H "X-Auth-Token: $TOKEN" \
   -d '{
-    "flavor_notes": ["chocolate", "caramel", "nutty"],
+    "flavor_notes": ["chocolate", "nutty", "caramel"],
     "roast_level": "Medium"
   }'
 
-# Step 3: Add beans to your library
-BEAN_ID=$(curl -s -X POST http://localhost:9000/beans \
+# Step 3: Add a coffee bean
+BEAN_ID=$(curl -s -X POST http://localhost/api/beans \
   -H "Content-Type: application/json" \
   -H "X-Auth-Token: $TOKEN" \
   -d '{
@@ -368,7 +295,7 @@ BEAN_ID=$(curl -s -X POST http://localhost:9000/beans \
       "process": "Washed",
       "variety": "Caturra",
       "roast_level": "Medium",
-      "roasted_on": "2024-11-20",
+      "roasted_on": "2024-12-01",
       "altitude": "1600m",
       "flavor_notes": ["chocolate", "caramel", "orange"]
     }
@@ -376,110 +303,83 @@ BEAN_ID=$(curl -s -X POST http://localhost:9000/beans \
 
 echo "Bean saved with ID: $BEAN_ID"
 
-# Step 4: List all your beans
-curl -X GET http://localhost:9000/beans \
-  -H "X-Auth-Token: $TOKEN" | jq '.'
-
-# Step 5: Generate a recipe for your bean
-curl -X POST http://localhost:9000/brew \
+# Step 4: Generate a recipe
+curl -X POST http://localhost/api/brew \
   -H "Content-Type: application/json" \
   -H "X-Auth-Token: $TOKEN" \
   -d '{
     "bean": {
       "name": "Colombia Huila",
       "process": "Washed",
-      "variety": "Caturra",
       "roast_level": "Medium",
-      "roasted_days": 3,
+      "roasted_days": 11,
       "flavor_notes": ["chocolate", "caramel"]
     },
     "brewer": "V60",
     "note": "Looking for balanced sweetness"
-  }' > recipe.json
+  }' | jq '.'
 
-# Step 6: Visualize the recipe
-curl -X POST http://localhost:9000/visualize \
+# Step 5: Get visualization
+curl -X POST http://localhost/api/visualize \
   -H "Content-Type: application/json" \
   -H "X-Auth-Token: $TOKEN" \
-  -d "{
-    \"recipe\": $(cat recipe.json),
-    \"formats\": [\"html\", \"mermaid\", \"ascii\"]
-  }" > visualization.html
-
-echo "Recipe and visualization saved!"
+  -d '{
+    "recipe": {...},
+    "formats": ["html", "ascii"]
+  }' > visualization.html
 ```
 
-### Example 2: Using Different Brewers
+#### Example 2: Different Brewers
 
 ```bash
-# V60 Recipe (larger dose, slower pour)
-curl -X POST http://localhost:9000/brew \
+# V60 - Larger dose, multiple pours
+curl -X POST http://localhost/api/brew \
   -H "Content-Type: application/json" \
   -d '{
     "bean": {
       "name": "Kenya AA",
       "process": "Washed",
       "roast_level": "Light-Medium",
-      "flavor_notes": ["blackcurrant", "tomato", "winey"]
+      "flavor_notes": ["blackcurrant", "tomato"]
     },
     "brewer": "V60"
   }' | jq '.brewing'
 
-# April Recipe (flatter bed, faster flow)
-curl -X POST http://localhost:9000/brew \
+# April - Flatter bed, faster flow
+curl -X POST http://localhost/api/brew \
   -H "Content-Type: application/json" \
   -d '{
     "bean": {
       "name": "Guatemala Antigua",
       "process": "Washed",
-      "roast_level": "Medium",
-      "flavor_notes": ["cocoa", "apple", "caramel"]
+      "roast_level": "Medium"
     },
     "brewer": "April"
   }' | jq '.brewing'
-
-# Origami Recipe (versatile, hybrid)
-curl -X POST http://localhost:9000/brew \
-  -H "Content-Type: application/json" \
-  -d '{
-    "bean": {
-      "name": "Costa Rica Tarrazu",
-      "process": "Honey",
-      "roast_level": "Medium-Light",
-      "flavor_notes": ["honey", "citrus", "brown sugar"]
-    },
-    "brewer": "Origami"
-  }' | jq '.brewing'
 ```
 
-### Example 3: RAG-Enhanced Recipe Generation
+#### Example 3: RAG-Enhanced Generation
 
-The system automatically queries the RAG service for similar recipes when available:
+The system automatically queries similar recipes from the vector database:
 
 ```bash
-# The agent will:
-# 1. Query RAG for similar beans (same origin, process, roast level)
-# 2. Use top 3 reference recipes to inform the new recipe
-# 3. Generate a personalized recipe considering your preferences
-
-curl -X POST http://localhost:9000/brew \
+curl -X POST http://localhost/api/brew \
   -H "Content-Type: application/json" \
   -d '{
     "bean": {
       "name": "Ethiopia Yirgacheffe",
       "process": "Washed",
-      "variety": "Heirloom",
       "roast_level": "Light",
       "roasted_days": 10,
-      "flavor_notes": ["jasmine", "bergamot", "lemon"]
+      "flavor_notes": ["jasmine", "bergamot"]
     },
     "brewer": "V60",
-    "note": "I want to highlight the floral notes"
+    "note": "Highlight floral notes"
   }'
 
-# The response includes metadata about RAG retrieval:
+# Response includes RAG metadata:
 # {
-#   "brewing": { ... },
+#   "brewing": {...},
 #   "metadata": {
 #     "rag_references_used": 3,
 #     "model": "gpt-4o-mini"
@@ -487,165 +387,60 @@ curl -X POST http://localhost:9000/brew \
 # }
 ```
 
-### Example 4: Using the Integrated Agent CLI
+### Command-Line Usage (Advanced)
+
+For developers and power users:
 
 ```bash
-# Install dependencies (if not using Docker)
+# Generate recipe + visualization using integrated agent
 cd agent_core
-pip install -r agent_requirements.txt
-
-# Generate recipe + visualization in one command
 python -m agent_core.integrated_agent \
   --bean '{
     "name": "Brazil Cerrado",
     "process": "Natural",
     "roast_level": "Medium-Dark",
-    "flavor_notes": ["chocolate", "nut", "caramel"]
+    "flavor_notes": ["chocolate", "nut"]
   }' \
   --brewer V60 \
-  --note "Looking for a full-bodied cup" \
   --output-dir ./my_recipe \
   --formats html mermaid ascii \
   --show-ascii
 
-# Output:
-# ✓ Recipe generated
-# ✓ HTML saved to: ./my_recipe/Brazil_Cerrado_recipe.html
-# ✓ Mermaid saved to: ./my_recipe/Brazil_Cerrado_recipe.md
-# ✓ ASCII saved to: ./my_recipe/Brazil_Cerrado_recipe.txt
-#
-# [ASCII visualization displayed in terminal]
+# Query RAG service directly
+curl -X POST http://localhost:8000/rag \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bean": {
+      "name": "Ethiopia",
+      "process": "Natural",
+      "roast_level": "Light"
+    },
+    "k": 3
+  }' | jq '.'
 ```
 
-## Environment Configuration
+---
 
-### Required Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key for recipe generation | `sk-proj-...` |
-
-### Optional Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RAG_SERVICE_URL` | RAG service endpoint | `http://localhost:8000` |
-| `REACT_APP_AGENT_API_URL` | Agent API URL (frontend) | `http://localhost:9000` |
-| `FRONTEND_ORIGINS` | Allowed CORS origins (comma-separated) | `http://localhost:3000` |
-| `RAG_PERSIST_DIR` | ChromaDB index directory | `./dailydrip_rag/indexes/chroma` |
-| `RAG_COLLECTION` | ChromaDB collection name | `coffee_chunks` |
-
-## Docker Commands Reference
-
-### Basic Commands
-
-```bash
-# Start full stack (build + pipeline + services)
-make run
-
-# Start services without rebuilding
-make start
-
-# Run RAG pipeline only (ingest → chunk → index)
-make pipeline
-
-# Start RAG service only
-make rag
-
-# Stop all services
-make down
-
-# Clean processed data and indexes
-make clean
-```
-
-### Advanced Docker Usage
-
-```bash
-# Build specific service
-docker compose build agent
-docker compose build rag
-
-# View logs
-docker compose logs -f agent
-docker compose logs -f rag
-
-# Run pipeline steps individually
-docker compose up ingest
-docker compose up chunk
-docker compose up index
-
-# Execute commands in running containers
-docker compose exec agent bash
-docker compose exec rag python -m src.service
-```
-
-## Frontend Companion App
-
-The `frontend/` directory hosts a Create React App + Tailwind UI that connects directly to the FastAPI agent.
-
-### Local Development
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server
-npm start
-
-# Run tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
-
-# Build for production
-npm build
-
-# Lint code
-npm run lint
-```
-
-### Frontend Features
-
-- **Authentication**: Register, login, logout with token-based auth
-- **User Profile**: Manage taste preferences (flavor notes, roast level)
-- **Bean Library**: CRUD operations for your coffee bean collection
-- **Recipe Generator**:
-  - Generate recipes from saved beans or manual input
-  - Select brewer (V60, April, Orea, Origami)
-  - Add custom brewing notes
-- **Visualization**: View recipe timelines in multiple formats
-
-### Configuration
-
-```bash
-# Point to different backend
-export REACT_APP_AGENT_API_URL="https://api.dailydrip.com"
-
-# Disable ESLint plugin (for older Node versions)
-export DISABLE_ESLINT_PLUGIN=true
-```
-
-## API Documentation
+## API Reference
 
 ### Authentication Endpoints
 
-#### Register User
-```bash
-POST /auth/register
-Content-Type: application/json
+#### POST /api/auth/register
+Register a new user account.
 
+**Request:**
+```json
 {
   "email": "user@example.com",
   "password": "secure_password",
   "name": "User Name"
 }
+```
 
-Response: {
-  "token": "auth_token_here",
+**Response:**
+```json
+{
+  "token": "auth_token_string",
   "user": {
     "user_id": "uuid",
     "email": "user@example.com",
@@ -658,27 +453,21 @@ Response: {
 }
 ```
 
-#### Login
-```bash
-POST /auth/login
-Content-Type: application/json
+#### POST /api/auth/login
+Login with existing credentials.
 
-{
-  "email": "user@example.com",
-  "password": "secure_password"
-}
-
-Response: Same as register
-```
+**Request:** Same as register (email + password only)
 
 ### Profile Endpoints
 
-#### Get Profile
-```bash
-GET /profile
-X-Auth-Token: your_token_here
+#### GET /api/profile
+Get current user profile.
 
-Response: {
+**Headers:** `X-Auth-Token: <token>`
+
+**Response:**
+```json
+{
   "user_id": "uuid",
   "email": "user@example.com",
   "name": "User Name",
@@ -689,12 +478,13 @@ Response: {
 }
 ```
 
-#### Update Preferences
-```bash
-PUT /profile/preferences
-X-Auth-Token: your_token_here
-Content-Type: application/json
+#### PUT /api/profile/preferences
+Update taste preferences.
 
+**Headers:** `X-Auth-Token: <token>`
+
+**Request:**
+```json
 {
   "flavor_notes": ["fruity", "floral"],
   "roast_level": "Light"
@@ -703,31 +493,18 @@ Content-Type: application/json
 
 ### Bean Library Endpoints
 
-#### List Beans
-```bash
-GET /beans
-X-Auth-Token: your_token_here
+#### GET /api/beans
+List all beans in user's library.
 
-Response: {
-  "beans": [
-    {
-      "bean_id": "uuid",
-      "name": "Ethiopia Sidamo",
-      "origin": "Ethiopia",
-      "process": "Natural",
-      "roasted_days": 8,
-      ...
-    }
-  ]
-}
-```
+**Headers:** `X-Auth-Token: <token>`
 
-#### Create Bean
-```bash
-POST /beans
-X-Auth-Token: your_token_here
-Content-Type: application/json
+#### POST /api/beans
+Add a new bean to library.
 
+**Headers:** `X-Auth-Token: <token>`
+
+**Request:**
+```json
 {
   "bean": {
     "name": "Colombia Huila",
@@ -735,40 +512,26 @@ Content-Type: application/json
     "process": "Washed",
     "variety": "Caturra",
     "roast_level": "Medium",
-    "roasted_on": "2024-11-20",
+    "roasted_on": "2024-12-01",
     "altitude": "1600m",
     "flavor_notes": ["chocolate", "caramel"]
   }
 }
 ```
 
-#### Update Bean
-```bash
-PUT /beans/{bean_id}
-X-Auth-Token: your_token_here
-Content-Type: application/json
+#### PUT /api/beans/{bean_id}
+Update an existing bean.
 
-{
-  "bean": {
-    "name": "Updated Name",
-    ...
-  }
-}
-```
-
-#### Delete Bean
-```bash
-DELETE /beans/{bean_id}
-X-Auth-Token: your_token_here
-```
+#### DELETE /api/beans/{bean_id}
+Delete a bean from library.
 
 ### Recipe Endpoints
 
-#### Generate Recipe
-```bash
-POST /brew
-Content-Type: application/json
+#### POST /api/brew
+Generate a brewing recipe.
 
+**Request:**
+```json
 {
   "bean": {
     "name": "Ethiopia Yirgacheffe",
@@ -778,10 +541,13 @@ Content-Type: application/json
     "flavor_notes": ["floral", "citrus"]
   },
   "brewer": "V60",
-  "note": "Highlight floral notes"
+  "note": "Optional brewing instruction"
 }
+```
 
-Response: {
+**Response:**
+```json
+{
   "brewing": {
     "brewer": "V60",
     "temperature": 93,
@@ -793,151 +559,320 @@ Response: {
       {"start": 30, "end": 80, "water_added": 95},
       {"start": 80, "end": 130, "water_added": 95}
     ]
+  },
+  "metadata": {
+    "rag_references_used": 3,
+    "model": "gpt-4o-mini"
   }
 }
 ```
 
-#### Visualize Recipe
-```bash
-POST /visualize
-Content-Type: application/json
+#### POST /api/visualize
+Generate recipe visualizations.
 
+**Request:**
+```json
 {
   "recipe": {
-    "bean": { ... },
-    "brewing": { ... }
+    "bean": {...},
+    "brewing": {...}
   },
   "formats": ["html", "mermaid", "ascii"]
 }
+```
 
-Response: {
+**Response:**
+```json
+{
   "html": "<html>...</html>",
   "mermaid": "gantt\n...",
-  "ascii": "=== Recipe Timeline ===\n..."
+  "ascii": "=== Timeline ===\n..."
 }
 ```
 
 ### RAG Service Endpoints
 
-#### Query Similar Recipes
-```bash
-POST http://localhost:8000/rag
-Content-Type: application/json
+#### POST /rag (Port 8000)
+Query similar brewing recipes from vector database.
 
+**Request:**
+```json
 {
   "bean": {
     "name": "Kenya AA",
     "process": "Washed",
-    "roast_level": "Light-Medium"
+    "roast_level": "Light"
   },
   "k": 3,
   "use_evaluation_reranking": true,
   "similarity_weight": 0.7
 }
-
-Response: {
-  "query": "bean.name: Kenya AA | bean.process: Washed | ...",
-  "results": [
-    {
-      "rank": 1,
-      "id": "chunk_id",
-      "distance": 0.234,
-      "bean_text": "...",
-      "brewing": { ... },
-      "evaluation": { ... },
-      "combined_score": 0.89
-    }
-  ]
-}
 ```
 
-#### Health Check
+#### GET /health
+Check RAG service health.
+
+---
+
+## Known Issues and Limitations
+
+### Current Limitations
+
+#### 1. Data and Model Constraints
+- **Limited Training Data:** RAG index contains sample data only (~100-200 records)
+- **Model Scope:** GPT-4o-mini may occasionally generate inconsistent pour timings
+- **Embedding Model:** Uses `all-MiniLM-L6-v2` which has ~384 dimensions (trade-off between speed and accuracy)
+- **Brewer Support:** Currently supports V60, April, Orea, and Origami only
+
+#### 2. System Performance
+- **Cold Start:** First RAG query may take 5-10 seconds while loading embeddings
+- **Memory Usage:** ChromaDB requires ~4-6GB RAM for full index
+- **Concurrent Users:** Single-instance deployment may slow with >10 concurrent users
+- **Token Limits:** Very long bean descriptions (>500 words) may be truncated
+
+#### 3. Deployment and Infrastructure
+- **State Management:** User data stored in JSONL files (not production-grade)
+- **No Database:** User accounts and beans are file-based (no PostgreSQL/MongoDB)
+- **Single Container:** Monolithic architecture limits horizontal scaling
+- **No Load Balancing:** Kubernetes deployment runs single replica
+- **Secret Management:** API keys via environment variables (consider HashiCorp Vault for production)
+
+#### 4. Frontend Limitations
+- **No Offline Mode:** Requires active internet connection
+- **Mobile Experience:** Optimized for desktop, mobile UI could be improved
+- **Browser Support:** Tested on Chrome/Firefox/Safari; may have issues with older browsers
+- **No Real-Time Updates:** Requires manual refresh to see new data
+
+#### 5. Authentication and Security
+- **Simple Token Auth:** Uses basic token authentication (not OAuth2/JWT with refresh tokens)
+- **No Password Reset:** Password recovery not implemented
+- **No Rate Limiting:** API endpoints not rate-limited (vulnerable to abuse)
+- **CORS Configuration:** Open CORS for development (should be restricted in production)
+
+### Known Issues
+
+#### Issue 1: RAG Service Connection Timeouts
+**Problem:** Occasionally, the agent API cannot reach the RAG service on first startup.
+
+**Workaround:**
 ```bash
-GET http://localhost:8000/health
+# Restart the application
+make down
+make start
 
-Response: {
-  "status": "healthy",
-  "collection": "coffee_chunks",
-  "count": 1234
-}
+# Or restart just the RAG service
+docker compose restart app
 ```
 
-## RAG Pipeline
+#### Issue 2: ChromaDB Lock Errors
+**Problem:** If the container crashes, ChromaDB may leave lock files causing startup failures.
 
-The Retrieval-Augmented Generation pipeline processes coffee brewing data and enables similarity-based recipe recommendations.
-
-### Pipeline Stages
-
-1. **Ingest** (`dailydrip_rag/src/ingest.py`)
-   - Reads raw CSV/JSON data
-   - Normalizes to canonical JSONL format
-   - Output: `data/processed/records.jsonl`
-
-2. **Chunk** (`dailydrip_rag/src/chunk.py`)
-   - Splits records into text chunks
-   - Prepares data for embedding
-   - Output: `data/processed/chunks.jsonl`
-
-3. **Index** (`dailydrip_rag/src/index.py`)
-   - Generates embeddings using `all-MiniLM-L6-v2`
-   - Builds ChromaDB vector index
-   - Output: `indexes/chroma/`
-
-4. **Service** (`dailydrip_rag/src/service.py`)
-   - FastAPI service for similarity search
-   - Supports evaluation-based reranking
-   - Endpoint: `POST /rag`
-
-### Running the Pipeline
-
+**Workaround:**
 ```bash
-# Run complete pipeline
-make pipeline
-
-# Or run stages individually
-docker compose up ingest
-docker compose up chunk
-docker compose up index
-
-# Start RAG service
-make rag
+# Clean the index and restart
+make clean
+make start
 ```
 
-### RAG Query Options
+#### Issue 3: Frontend Build Errors (Node Version)
+**Problem:** `npm install` fails with older Node versions (<16).
 
-The RAG service supports advanced reranking based on evaluation scores:
-
-```python
-{
-  "bean": { ... },                    # Query bean
-  "k": 3,                             # Number of results
-  "use_evaluation_reranking": true,   # Enable score-based reranking
-  "similarity_weight": 0.7,           # Weight for similarity (0-1)
-  "retrieval_multiplier": 3           # Fetch k × multiplier before reranking
-}
+**Workaround:**
+```bash
+# Use Node 18 (LTS)
+nvm install 18
+nvm use 18
+cd frontend
+npm install
 ```
+
+#### Issue 4: OpenAI API Rate Limits
+**Problem:** Free-tier OpenAI accounts may hit rate limits with frequent requests.
+
+**Workaround:**
+- Wait 60 seconds between requests
+- Upgrade to paid OpenAI account
+- Use `--no-rag` flag to reduce token usage
+
+#### Issue 5: Large Bean Libraries (>100 beans)
+**Problem:** Frontend may slow down when displaying >100 beans.
+
+**Workaround:**
+- Implement pagination (currently showing all beans)
+- Use search/filter functionality
+
+### Future Improvements
+
+To address these limitations, future versions could include:
+
+1. **Data Enhancements**
+   - Collect real user brewing feedback
+   - Expand training data to 1000+ recipes
+   - Support more brewers (AeroPress, French Press, Chemex)
+
+2. **Architecture Improvements**
+   - Microservices architecture with separate containers
+   - PostgreSQL for user data
+   - Redis for session management and caching
+   - Message queue (RabbitMQ/Kafka) for async processing
+
+3. **Feature Additions**
+   - Recipe versioning and history
+   - Community sharing and ratings
+   - Multi-language support
+   - Hardware integration (smart scales, timers)
+   - Brew log tracking and analytics
+
+4. **Security Enhancements**
+   - OAuth2 authentication
+   - Role-based access control (RBAC)
+   - API rate limiting and throttling
+   - HTTPS/TLS encryption
+
+5. **Performance Optimization**
+   - Response caching
+   - Horizontal pod autoscaling (HPA)
+   - CDN for frontend assets
+   - Database indexing and query optimization
+
+---
+
+## Project Architecture
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│              DailyDrip System (Port 80)              │
+│                   Nginx Reverse Proxy                │
+└─────────────────┬───────────────────────────────────┘
+                  │
+    ┌─────────────┴─────────────┐
+    │                           │
+    ▼                           ▼
+┌────────────┐            ┌─────────────┐
+│  Frontend  │            │  API Proxy  │
+│   (React)  │            │ /api/* → :9000│
+│  Static    │            └──────┬───────┘
+│  Files     │                   │
+└────────────┘                   │
+                                 ▼
+                        ┌──────────────────┐
+                        │   Agent API      │
+                        │   (FastAPI)      │
+                        │   Port 9000      │
+                        └────────┬─────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+                    ▼                         ▼
+           ┌─────────────────┐      ┌─────────────────┐
+           │  OpenAI API     │      │  RAG Service    │
+           │  (gpt-4o-mini)  │      │  Port 8000      │
+           └─────────────────┘      └────────┬────────┘
+                                              │
+                                              ▼
+                                     ┌─────────────────┐
+                                     │   ChromaDB      │
+                                     │ Vector Database │
+                                     └─────────────────┘
+```
+
+### Technology Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | React 18, Tailwind CSS | User interface and interactions |
+| **Reverse Proxy** | Nginx | Serve static files, proxy API requests |
+| **API** | FastAPI, Python 3.11 | REST API endpoints |
+| **AI/ML** | OpenAI GPT-4o-mini | Recipe generation |
+| **RAG** | ChromaDB, Sentence-Transformers | Similarity search and retrieval |
+| **Process Manager** | Supervisord | Manage multiple services in one container |
+| **Container** | Docker, Docker Compose | Containerization and orchestration |
+| **Orchestration** | Kubernetes (GKE) | Production deployment |
+| **IaC** | Pulumi (Python) | Infrastructure as Code |
+
+### Repository Structure
+
+```
+AC215_the-daily-drip/
+├── README.md                    # This file
+├── docker-compose.yml           # Container orchestration
+├── Dockerfile.monolith          # Multi-stage Docker build
+├── supervisord.conf             # Process manager config
+├── nginx.monolith.conf          # Nginx configuration
+├── Makefile                     # Build and deployment commands
+│
+├── agent_core/                  # Backend API & Agent Logic
+│   ├── agent.py                 # FastAPI application
+│   ├── integrated_agent.py      # CLI agent
+│   ├── visualization_agent_v2.py
+│   ├── agent_requirements.txt
+│   └── tests/                   # Unit tests
+│
+├── dailydrip_rag/               # RAG Pipeline
+│   ├── src/
+│   │   ├── ingest.py            # Data ingestion
+│   │   ├── chunk.py             # Text chunking
+│   │   ├── index.py             # Vector indexing
+│   │   ├── query.py             # Similarity search
+│   │   └── service.py           # FastAPI RAG service
+│   ├── data/                    # Raw and processed data
+│   ├── indexes/                 # ChromaDB vector store
+│   ├── tests/                   # RAG tests
+│   └── Makefile                 # RAG-specific commands
+│
+├── frontend/                    # React Application
+│   ├── src/
+│   │   ├── components/          # React components
+│   │   ├── context/             # Auth context
+│   │   ├── services/            # API client
+│   │   └── App.js
+│   ├── public/
+│   ├── package.json
+│   └── Dockerfile
+│
+├── k8s/                         # Kubernetes Deployment
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── pulumi/                  # Infrastructure as Code
+│
+├── CI-tests/                    # CI/CD Configuration
+│   ├── setup-tests.sh
+│   └── run-all-tests.sh
+│
+└── docs/                        # Additional Documentation
+    ├── INTEGRATION_USAGE.md
+    ├── application_design.md
+    └── COVERAGE_GAPS.md
+```
+
+---
 
 ## Testing
 
-### Backend Tests
+### Running Tests
+
+#### Backend Tests (Python)
 
 ```bash
 # RAG pipeline tests
 cd dailydrip_rag
-pytest tests/ -v --cov=src --cov-report=term
+pytest tests/ -v --cov=src --cov-report=term-missing
 
 # Agent core tests
 cd agent_core
-pytest tests/ -v --cov=. --cov-report=term
+pytest tests/ -v --cov=. --cov-report=term-missing
 
 # Run specific test file
 pytest tests/test_service.py -v
 
-# Run with coverage report
+# Generate HTML coverage report
 pytest --cov=src --cov-report=html
+open htmlcov/index.html
 ```
 
-### Frontend Tests
+#### Frontend Tests (JavaScript)
 
 ```bash
 cd frontend
@@ -945,187 +880,154 @@ cd frontend
 # Run all tests
 npm test
 
-# Run tests with coverage
+# Run with coverage
 npm run test:coverage
 
-# Run tests in CI mode
+# Run in CI mode (non-interactive)
 npm run test:ci
-
-# Run specific test file
-npm test -- BeanCollection.test.js
 ```
 
-### CI/CD Pipeline
+### Test Coverage
 
-The project uses GitHub Actions for continuous integration:
+Current test coverage:
+- **Agent Core:** 77% (see COVERAGE_GAPS.md)
+- **RAG Service:** 67%
+- **Frontend:** ~80%
 
-- **Python CI** ([.github/workflows/python-ci.yml](.github/workflows/python-ci.yml))
-  - Linting with flake8
-  - Format checking with black
-  - Unit tests with pytest
-  - Coverage reporting to Codecov
+Coverage reports are automatically uploaded to [Codecov](https://codecov.io/gh/joannawqy/AC215_the-daily-drip) on each commit.
 
-- **Frontend CI** ([.github/workflows/frontend-ci.yml](.github/workflows/frontend-ci.yml))
-  - Linting with ESLint
-  - Unit tests with Jest
-  - Coverage reporting
+### Continuous Integration
 
-- **Docker CI** ([.github/workflows/docker-ci.yml](.github/workflows/docker-ci.yml))
-  - Build verification for all services
-  - Multi-stage build testing
+The project uses GitHub Actions for automated testing:
 
-All workflows run on push to `main` and `milestone4` branches, and on pull requests.
+- **Python CI:** Linting (flake8), formatting (black), unit tests (pytest)
+- **Frontend CI:** Linting (ESLint), unit tests (Jest)
+- **Docker CI:** Build verification for all services
 
-## Troubleshooting
+All workflows run on push and pull requests.
 
-### Common Issues
-
-**Issue: "Connection refused" when calling API**
-```bash
-# Check if services are running
-docker compose ps
-
-# Check logs
-docker compose logs agent
-docker compose logs rag
-
-# Restart services
-make down
-make run
-```
-
-**Issue: "OpenAI API key not found"**
-```bash
-# Set the environment variable
-export OPENAI_API_KEY="your-key-here"
-
-# Verify it's set
-echo $OPENAI_API_KEY
-
-# Restart the agent service
-docker compose restart agent
-```
-
-**Issue: "ChromaDB index not found"**
-```bash
-# Rebuild the RAG index
-make pipeline
-
-# Verify index exists
-ls -la dailydrip_rag/indexes/chroma/
-
-# Restart RAG service
-make rag
-```
-
-**Issue: Frontend can't connect to backend**
-```bash
-# Check API URL configuration
-echo $REACT_APP_AGENT_API_URL
-
-# Update if needed
-export REACT_APP_AGENT_API_URL="http://localhost:9000"
-
-# Restart frontend
-cd frontend
-npm start
-```
-
-**Issue: "Module not found" errors in frontend**
-```bash
-# Clear node_modules and reinstall
-cd frontend
-rm -rf node_modules package-lock.json
-npm install
-```
-
-## Development Workflow
-
-### Adding New Features
-
-1. **Create a feature branch**
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-2. **Make changes and test locally**
-   ```bash
-   # Backend
-   cd dailydrip_rag  # or agent_core
-   pytest tests/ -v
-   flake8 src/
-
-   # Frontend
-   cd frontend
-   npm test
-   npm run lint
-   ```
-
-3. **Commit with descriptive messages**
-   ```bash
-   git add .
-   git commit -m "Add feature: description"
-   ```
-
-4. **Push and create PR**
-   ```bash
-   git push origin feature/my-new-feature
-   # Create pull request on GitHub
-   ```
-
-### Code Style Guidelines
-
-**Python (PEP 8)**
-- Max line length: 127 characters
-- Use snake_case for functions and variables
-- Use PascalCase for classes
-- Add docstrings to all functions and classes
-- Type hints encouraged
-
-**JavaScript (Airbnb Style)**
-- Use camelCase for functions and variables
-- Use PascalCase for components
-- Prefer functional components with hooks
-- Add JSDoc comments for complex functions
-
-## Validation & Deliverables
-
-- ✅ **Functional Demo**: `/brew` → recipe JSON, `/visualize` → HTML timeline
-- ✅ **RAG Integration**: Agent gracefully falls back when RAG is offline
-- ✅ **Frontend UI**: Complete React application with authentication
-- ✅ **Documentation**: Comprehensive README, integration guide, and code comments
-- ✅ **Testing**: 11 test files with CI/CD integration
-- ✅ **Code Coverage**: Tracked via Codecov with badges
+---
 
 ## Additional Resources
 
-- **Application Design**: See [APPLICATION_DESIGN.md](APPLICATION_DESIGN.md) for comprehensive architecture documentation
-- **Integration Guide**: See [INTEGRATION_USAGE.md](INTEGRATION_USAGE.md) for detailed agent usage
-- **RAG Documentation**: See [dailydrip_rag/README.md](dailydrip_rag/README.md) for pipeline details
-- **CI Setup**: See [CI-tests/CI_SETUP_SUMMARY.md](CI-tests/CI_SETUP_SUMMARY.md) for CI/CD configuration
-- **Quick Start CI**: See [CI-tests/QUICK_START_CI.md](CI-tests/QUICK_START_CI.md) for CI quick start guide
-- **Project Report**: See [reports/MS2 Report.pdf](reports/MS2%20Report.pdf) for milestone 2 deliverables
+### Documentation
 
-## Future Enhancements
+- **[INTEGRATION_USAGE.md](INTEGRATION_USAGE.md)** - Detailed agent integration guide and CLI usage
+- **[application_design.md](application_design.md)** - Comprehensive architecture documentation
+- **[dailydrip_rag/README.md](dailydrip_rag/README.md)** - RAG pipeline detailed documentation
+- **[COVERAGE_GAPS.md](COVERAGE_GAPS.md)** - Test coverage analysis and improvement areas
+- **[CI-tests/CI_SETUP_SUMMARY.md](CI-tests/CI_SETUP_SUMMARY.md)** - CI/CD pipeline configuration
 
-1. **Expanded RAG Coverage**: Collect real user brewing logs and feedback
-2. **Adaptive Learning**: Integrate feedback loop for recipe evaluation
-3. **Mobile App**: Build native mobile interface for iOS/Android
-4. **Advanced Visualizations**: Interactive charts with taste profiles
-5. **Community Features**: Share recipes and brewing techniques
-6. **Hardware Integration**: Connect to smart scales and temperature sensors
+### Sample Files
+
+- **[tools/bean_request.json](tools/bean_request.json)** - Sample brew API request
+- **[tools/visualize_request.json](tools/visualize_request.json)** - Sample visualization request
+
+### External Links
+
+- **GitHub Repository:** https://github.com/joannawqy/AC215_the-daily-drip
+- **Codecov Dashboard:** https://codecov.io/gh/joannawqy/AC215_the-daily-drip
+- **OpenAI API Docs:** https://platform.openai.com/docs
+- **ChromaDB Docs:** https://docs.trychroma.com/
+
+---
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+**Problem: "Connection refused" when accessing http://localhost**
+
+```bash
+# Check if container is running
+docker compose ps
+
+# View logs
+docker compose logs -f app
+
+# Restart
+make down && make start
+```
+
+**Problem: "OPENAI_API_KEY not set" error**
+
+```bash
+# Set the environment variable
+export OPENAI_API_KEY="sk-your-key-here"
+
+# Verify
+echo $OPENAI_API_KEY
+
+# Restart container to pick up new env var
+make down && make start
+```
+
+**Problem: ChromaDB "Collection not found" error**
+
+```bash
+# Rebuild RAG index
+make clean
+make start
+
+# Wait for initialization (check logs)
+docker compose logs -f app | grep "RAG"
+```
+
+**Problem: Frontend shows "Network Error"**
+
+This usually means nginx is not proxying correctly to the backend.
+
+```bash
+# Check nginx config
+docker compose exec app cat /etc/nginx/conf.d/default.conf
+
+# Check if agent API is running
+docker compose exec app curl http://localhost:9000/health
+
+# Restart nginx
+docker compose exec app supervisorctl restart nginx
+```
+
+**Problem: High memory usage (>8GB)**
+
+```bash
+# Check container memory
+docker stats
+
+# Reduce ChromaDB cache (edit docker-compose.yml)
+# Add: CHROMA_CACHE_SIZE=100
+
+# Restart
+make down && make start
+```
+
+---
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+---
+
 ## Acknowledgments
 
-- UC Davis Coffee Center for sample brewing data
-- OpenAI for GPT-4o-mini API
-- ChromaDB for vector database technology
-- Harvard AC215 course staff and instructors
+- **UC Davis Coffee Center** for sample brewing data and research
+- **OpenAI** for GPT-4o-mini API access
+- **ChromaDB** for open-source vector database
+- **Harvard AC215 (Fall 2024)** course staff and instructors
+- Coffee enthusiast community for inspiration and feedback
 
 ---
 
-**Questions or Issues?** Please open an issue on GitHub or contact the development team.
+## Contact and Support
+
+**Questions or Issues?**
+- Open an issue on [GitHub Issues](https://github.com/joannawqy/AC215_the-daily-drip/issues)
+- Contact the development team via course channels
+
+**Contributing:**
+While this is a course project, we welcome feedback and suggestions for future improvements.
+
+---
+
+**Happy Brewing! ☕**
