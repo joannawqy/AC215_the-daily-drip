@@ -1,16 +1,16 @@
 version: "3.9"
 
 x-shared-volumes: &shared-volumes
-  - ./dailydrip_rag/data:/app/data
-  - ./dailydrip_rag/indexes:/app/indexes
-  - ./dailydrip_rag:/app/dailydrip_rag
-  - ./agent_core:/app/agent_core
+  - ../dailydrip_rag/data:/app/data
+  - ../dailydrip_rag/indexes:/app/indexes
+  - ../dailydrip_rag:/app/dailydrip_rag
+  - ../agent_core:/app/agent_core
 
 services:
   app:
     build:
-      context: .
-      dockerfile: Dockerfile.monolith
+      context: ..
+      dockerfile: deployment/Dockerfile.monolith
     ports:
       - "80:80" # Frontend
       - "8000:8000" # RAG (Debug)

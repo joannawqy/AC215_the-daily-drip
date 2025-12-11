@@ -143,7 +143,7 @@ make start
 
 ```bash
 # Build the monolithic image
-docker build -f Dockerfile.monolith -t the-daily-drip-app:latest .
+docker build -f deployment/Dockerfile.monolith -t the-daily-drip-app:latest .
 
 # Tag for Google Container Registry
 docker tag the-daily-drip-app:latest gcr.io/ac215-480602/the-daily-drip-app:latest
@@ -797,11 +797,24 @@ To address these limitations, future versions could include:
 ```
 AC215_the-daily-drip/
 ├── README.md                    # This file
-├── docker-compose.yml           # Container orchestration
-├── Dockerfile.monolith          # Multi-stage Docker build
-├── supervisord.conf             # Process manager config
-├── nginx.monolith.conf          # Nginx configuration
+├── LICENSE                      # MIT License
 ├── Makefile                     # Build and deployment commands
+├── .gitignore                   # Git ignore rules
+│
+├── docs/                        # Documentation
+│   ├── INTEGRATION_USAGE.md     # Agent integration guide
+│   ├── application_design.md    # Architecture documentation
+│   ├── COVERAGE_GAPS.md         # Test coverage analysis
+│   ├── DATA_VERSIONING.md       # Data versioning docs
+│   ├── RAG_EVALUATION(MODEL_FINETUNING).md
+│   └── BLOG_POST.md             # Project blog post
+│
+├── deployment/                  # Deployment Configuration
+│   ├── docker-compose.yml       # Container orchestration
+│   ├── Dockerfile.monolith      # Multi-stage Docker build
+│   ├── Dockerfile.agent         # Agent-only Dockerfile
+│   ├── nginx.monolith.conf      # Nginx configuration
+│   └── supervisord.conf         # Process manager config
 │
 ├── agent_core/                  # Backend API & Agent Logic
 │   ├── agent.py                 # FastAPI application
@@ -841,10 +854,10 @@ AC215_the-daily-drip/
 │   ├── setup-tests.sh
 │   └── run-all-tests.sh
 │
-└── docs/                        # Additional Documentation
-    ├── INTEGRATION_USAGE.md
-    ├── application_design.md
-    └── COVERAGE_GAPS.md
+├── scripts/                     # Utility scripts
+├── tools/                       # Development tools
+├── data/                        # Application data (gitignored)
+└── reports/                     # Project reports
 ```
 
 ---
@@ -912,10 +925,10 @@ All workflows run on push and pull requests.
 
 ### Documentation
 
-- **[INTEGRATION_USAGE.md](INTEGRATION_USAGE.md)** - Detailed agent integration guide and CLI usage
-- **[application_design.md](application_design.md)** - Comprehensive architecture documentation
+- **[docs/INTEGRATION_USAGE.md](docs/INTEGRATION_USAGE.md)** - Detailed agent integration guide and CLI usage
+- **[docs/application_design.md](docs/application_design.md)** - Comprehensive architecture documentation
 - **[dailydrip_rag/README.md](dailydrip_rag/README.md)** - RAG pipeline detailed documentation
-- **[COVERAGE_GAPS.md](COVERAGE_GAPS.md)** - Test coverage analysis and improvement areas
+- **[docs/COVERAGE_GAPS.md](docs/COVERAGE_GAPS.md)** - Test coverage analysis and improvement areas
 - **[CI-tests/CI_SETUP_SUMMARY.md](CI-tests/CI_SETUP_SUMMARY.md)** - CI/CD pipeline configuration
 
 ### Sample Files

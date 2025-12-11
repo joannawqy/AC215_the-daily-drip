@@ -1,4 +1,4 @@
-DOCKER_COMPOSE := docker compose
+DOCKER_COMPOSE := docker compose -f deployment/docker-compose.yml
 
 .PHONY: run start rag down clean build-runtime
 
@@ -33,4 +33,3 @@ clean:
 build-runtime:
 	@echo "Building monolithic image..."
 	$(DOCKER_COMPOSE) build app
-
